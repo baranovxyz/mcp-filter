@@ -36,18 +36,18 @@
     "url": "https://github.com/baranovxyz/mcp-filter/issues"
   },
   "dependencies": {
-    "minimatch": "^10.0.1"
+    "minimatch": "10.0.1"
   },
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "1.0.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.4",
-    "@types/node": "^22.10.5",
-    "@vitest/coverage-v8": "^2.1.8",
-    "typescript": "^5.7.3",
-    "vitest": "^2.1.8",
-    "zod": "^3.24.1"
+    "@modelcontextprotocol/sdk": "1.0.4",
+    "@types/node": "22.10.5",
+    "@vitest/coverage-v8": "2.1.8",
+    "typescript": "5.7.3",
+    "vitest": "2.1.8",
+    "zod": "3.24.1"
   },
   "engines": {
     "node": ">=18"
