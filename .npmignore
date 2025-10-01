@@ -1,0 +1,22 @@
+# Source files
+src/
+tests/
+test-server.ts
+
+# Config files
+tsconfig.json
+vitest.config.ts
+.gitignore
+
+# Development files
+*.log
+.DS_Store
+coverage/
+.vitest-cache/
+
+# Documentation that's not needed in package
+CLAUDE.md
+
+# Git
+.git/
+.github/

@@ -6,13 +6,18 @@
   "bin": {
     "mcp-filter": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm test run && pnpm run build"
   },
   "keywords": [
     "mcp",
@@ -20,8 +25,16 @@
     "proxy",
     "filter"
   ],
-  "author": "",
+  "author": "baranovxyz",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/baranovxyz/mcp-filter.git"
+  },
+  "homepage": "https://github.com/baranovxyz/mcp-filter#readme",
+  "bugs": {
+    "url": "https://github.com/baranovxyz/mcp-filter/issues"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
     "minimatch": "^10.0.1"
