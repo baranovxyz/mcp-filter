@@ -1,5 +1,8 @@
 # mcp-filter
 
+[![npm version](https://badge.fury.io/js/mcp-filter.svg)](https://www.npmjs.com/package/mcp-filter)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 MCP server proxy to filter tools, resources, and prompts from upstream MCP servers.
 
 ## Installation
@@ -54,9 +57,17 @@ pnpm install
 # Build
 pnpm run build
 
+# Run tests
+pnpm test
+
 # Test locally
 ./dist/index.js --disable "playwright*" -- npx tsx test-server.ts
 ```
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/mcp-filter)
+- [GitHub repository](https://github.com/baranovxyz/mcp-filter)
 
 ## License
 

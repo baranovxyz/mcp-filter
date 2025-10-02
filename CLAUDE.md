@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `mcp-filter` is an MCP (Model Context Protocol) proxy server that filters tools, resources, and prompts from upstream MCP servers using glob patterns. It acts as a middleware layer between MCP clients and servers.
 
+**Published Package**: https://www.npmjs.com/package/mcp-filter
+
 ## Development Commands
 
 ```bash
@@ -119,3 +121,21 @@ When working with MCP SDK:
 - **Type**: ES modules (`"type": "module"` in package.json)
 - **Imports**: Always use `.js` extension in imports (TypeScript convention for ESM)
 - **Build**: TypeScript compiles to `dist/` with Node16 module resolution
+
+## Publishing
+
+The package is published to npm at https://www.npmjs.com/package/mcp-filter
+
+### Publishing Checklist
+
+1. Ensure all tests pass: `pnpm test`
+2. Update version in package.json if needed
+3. Build: `pnpm run build`
+4. Publish: `pnpm publish`
+
+### Package Configuration
+
+- **Dependencies**: Uses peerDependencies for `@modelcontextprotocol/sdk` to allow consumers to bring their own version
+- **Files included**: Only `dist/`, `README.md`, and `LICENSE` are published (configured via `files` field)
+- **Excluded from package**: Tests, configs, source files (via `.npmignore`)
+- **Version locking**: `.npmrc` has `save-exact=true` for reproducible builds
