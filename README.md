@@ -34,9 +34,33 @@ npx mcp-filter --disable "debug*" -- node my-mcp-server.js
 ## Pattern Examples
 
 - `playwright*` - Match all items starting with "playwright"
-- `*_admin` - Match all items ending with "_admin"
+- `*_admin` - Match all items ending with "\_admin"
 - `test_*_debug` - Match items with pattern in middle
 - `exact_name` - Match exact name
+
+## Using with Cursor IDE
+
+Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "mcp-filter",
+        "--disable",
+        "browser_close",
+        "--",
+        "npx",
+        "@playwright/mcp@latest"
+      ]
+    }
+  }
+}
+```
+
+After adding the configuration, restart Cursor completely to apply the changes.
 
 ## How It Works
 
