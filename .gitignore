@@ -4,3 +4,6 @@ dist/
 .DS_Store
 coverage/
 .vitest-cache/
+
+# Local development references (not part of project)
+context/
