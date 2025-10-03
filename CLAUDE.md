@@ -86,7 +86,7 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
   - `tools/list`, `resources/list`, `prompts/list` → filter response before returning
   - `tools/call`, `prompts/get` → block if name matches excluded pattern
   - `resources/read` → forwarded (cannot filter by URI easily)
-  - Precedence: `--exclude` > `--include` > default allow (rsync-style)
+  - Rsync-style: patterns evaluated in order, first match wins
 
 ## Code Organization
 
@@ -127,6 +127,12 @@ When working with MCP SDK:
 - **Type**: ES modules (`"type": "module"` in package.json)
 - **Imports**: Always use `.js` extension in imports (TypeScript convention for ESM)
 - **Build**: TypeScript compiles to `dist/` with Node16 module resolution
+
+## Design Decisions
+
+- **No localization (`--locale`)**: English tool descriptions work well cross-lingually. See [docs/architecture-decisions.md](docs/architecture-decisions.md).
+- **Rsync-style filtering**: `--include`/`--exclude` patterns evaluated in order, first match wins. Familiar to Unix users.
+- **YAGNI approach**: Only implement features when users request them. See [docs/roadmap.md](docs/roadmap.md) for potential future features.
 
 ## Publishing
 

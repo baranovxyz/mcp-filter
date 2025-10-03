@@ -36,11 +36,13 @@ npx mcp-filter --exclude "debug*" -- node my-mcp-server.js
 
 ## Options
 
-- `--exclude <pattern>` - Exclude tools/resources/prompts matching this pattern (like rsync --exclude)
-- `--include <pattern>` - Include ONLY tools/resources/prompts matching this pattern (like rsync --include)
+- `--exclude <pattern>` - Exclude tools/resources/prompts matching this pattern
+- `--include <pattern>` - Include ONLY tools/resources/prompts matching this pattern (whitelist mode)
 - `--` - Separates filter options from upstream server command
 
 Both options can be specified multiple times and combined together.
+
+**Filtering style:** rsync-style evaluation where patterns are evaluated in the order specified, and first match wins.
 
 ## Filtering Modes
 
@@ -64,30 +66,72 @@ npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- np
 
 ### Combination Mode (--include + --exclude)
 
-Include patterns with exceptions. **Exclude patterns always take precedence** (same as rsync):
+**Rsync-style filtering**: patterns evaluated in order, first match wins.
 
 ```bash
-# Allow all browser tools EXCEPT close and evaluate
-npx mcp-filter --include "browser_*" --exclude "browser_close" --exclude "browser_evaluate" -- npx @playwright/mcp
+# Example 1: Include first, then exclude
+npx mcp-filter --include "browser_*" --exclude "browser_close" -- npx @playwright/mcp
+# Result: All browser_* tools are INCLUDED (browser_* matched first)
+# browser_close is also included because it matches browser_* first
+
+# Example 2: Exclude first, then include (different result!)
+npx mcp-filter --exclude "browser_close" --include "browser_*" -- npx @playwright/mcp
+# Result: browser_close is EXCLUDED (matched exclude first)
+# Other browser_* tools are included
+
+# Example 3: More specific patterns first
+npx mcp-filter --exclude "browser_close" --exclude "browser_evaluate" --include "browser_*" -- npx @playwright/mcp
+# Result: browser_close and browser_evaluate excluded (matched first)
+# All other browser_* tools included
 ```
 
-**Precedence Rule:** `--exclude` > `--include` > default allow
-
-When a tool matches both `--include` and `--exclude`, it will be **excluded** (rsync-style behavior).
+**Key principle**: Order matters! The first pattern that matches determines if the item is included or excluded.
 
 ## Pattern Examples
+
+Patterns use glob syntax (via minimatch):
 
 - `playwright*` - Match all items starting with "playwright"
 - `*_admin` - Match all items ending with "\_admin"
 - `test_*_debug` - Match items with pattern in middle
 - `exact_name` - Match exact name
 - `browser_*` - Match all browser-related tools
+- `*` - Match everything
+
+## Rsync-Style Filtering
+
+mcp-filter uses rsync-style pattern evaluation:
+
+1. **Order matters**: Patterns are evaluated in the order you specify them
+2. **First match wins**: Once a pattern matches, that determines the outcome
+3. **Default behavior**:
+   - If no patterns specified: allow everything (passthrough)
+   - If only `--include`: items not matching any include are excluded (whitelist mode)
+   - If only `--exclude`: items not matching any exclude are included
+   - If mixed: items not matching any pattern use whitelist mode if includes exist
+
+**Example workflow**:
+
+```bash
+# Put more specific patterns first
+npx mcp-filter \
+  --exclude "browser_close" \
+  --exclude "browser_evaluate" \
+  --include "browser_*" \
+  -- npx @playwright/mcp
+
+# This works because:
+# 1. browser_close matches --exclude "browser_close" first → excluded
+# 2. browser_evaluate matches --exclude "browser_evaluate" first → excluded
+# 3. browser_navigate matches --include "browser_*" → included
+# 4. other_tool doesn't match any pattern, but --include exists → excluded (whitelist mode)
+```
 
 ## Using with Cursor IDE
 
 Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
 
-### Example 1: Exclude dangerous tools
+### Example 1: Exclude specific dangerous tools
 
 ```json
 {
@@ -133,7 +177,7 @@ Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
 }
 ```
 
-### Example 3: Include category with exceptions
+### Example 3: Include category with exceptions (rsync-style)
 
 ```json
 {
@@ -142,10 +186,12 @@ Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
       "command": "npx",
       "args": [
         "mcp-filter",
-        "--include",
-        "browser_*",
         "--exclude",
         "browser_close",
+        "--exclude",
+        "browser_evaluate",
+        "--include",
+        "browser_*",
         "--",
         "npx",
         "@playwright/mcp@latest"
@@ -154,6 +200,8 @@ Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
   }
 }
 ```
+
+Note: Exclude patterns come first to match before the broader include pattern.
 
 After adding the configuration, restart Cursor completely to apply the changes.
 
@@ -180,7 +228,7 @@ pnpm run build
 pnpm test
 
 # Test locally
-./dist/index.js --disable "playwright*" -- npx tsx test-server.ts
+./dist/index.js --exclude "playwright*" -- npx tsx test-server.ts
 ```
 
 ## Links
