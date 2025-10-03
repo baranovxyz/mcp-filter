@@ -1,17 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { Filter } from "../../src/filter.js";
+import { FilterPattern } from "../../src/cli.js";
 
-describe("Filter", () => {
-  describe("shouldExclude - exclude mode only", () => {
+describe("Filter - rsync-style", () => {
+  describe("exclude mode only", () => {
     it("should match exact name", () => {
-      const filter = new Filter(["exact_match"]);
+      const filter = new Filter([{ type: "exclude", pattern: "exact_match" }]);
 
       expect(filter.shouldExclude("exact_match")).toBe(true);
       expect(filter.shouldExclude("not_exact")).toBe(false);
     });
 
     it("should match wildcard patterns", () => {
-      const filter = new Filter(["playwright*"]);
+      const filter = new Filter([{ type: "exclude", pattern: "playwright*" }]);
 
       expect(filter.shouldExclude("playwright_navigate")).toBe(true);
       expect(filter.shouldExclude("playwright_click")).toBe(true);
@@ -20,7 +21,7 @@ describe("Filter", () => {
     });
 
     it("should match suffix patterns", () => {
-      const filter = new Filter(["*_admin"]);
+      const filter = new Filter([{ type: "exclude", pattern: "*_admin" }]);
 
       expect(filter.shouldExclude("delete_admin")).toBe(true);
       expect(filter.shouldExclude("user_admin")).toBe(true);
@@ -28,15 +29,19 @@ describe("Filter", () => {
     });
 
     it("should match middle patterns", () => {
-      const filter = new Filter(["test_*_debug"]);
+      const filter = new Filter([{ type: "exclude", pattern: "test_*_debug" }]);
 
       expect(filter.shouldExclude("test_foo_debug")).toBe(true);
       expect(filter.shouldExclude("test_bar_baz_debug")).toBe(true);
       expect(filter.shouldExclude("test_debug")).toBe(false);
     });
 
-    it("should match any pattern in list", () => {
-      const filter = new Filter(["playwright*", "debug_*", "admin"]);
+    it("should match any pattern in list (first match wins)", () => {
+      const filter = new Filter([
+        { type: "exclude", pattern: "playwright*" },
+        { type: "exclude", pattern: "debug_*" },
+        { type: "exclude", pattern: "admin" },
+      ]);
 
       expect(filter.shouldExclude("playwright_click")).toBe(true);
       expect(filter.shouldExclude("debug_log")).toBe(true);
@@ -51,73 +56,107 @@ describe("Filter", () => {
     });
   });
 
-  describe("shouldExclude - include mode only", () => {
+  describe("include mode only", () => {
     it("should allow only included tools", () => {
-      const filter = new Filter([], ["browser_navigate", "browser_screenshot"]);
+      const filter = new Filter([
+        { type: "include", pattern: "browser_navigate" },
+        { type: "include", pattern: "browser_screenshot" },
+      ]);
 
       expect(filter.shouldExclude("browser_navigate")).toBe(false);
       expect(filter.shouldExclude("browser_screenshot")).toBe(false);
-      expect(filter.shouldExclude("browser_close")).toBe(true);
-      expect(filter.shouldExclude("other_tool")).toBe(true);
+      expect(filter.shouldExclude("browser_close")).toBe(true); // not in whitelist
+      expect(filter.shouldExclude("other_tool")).toBe(true); // not in whitelist
     });
 
     it("should work with wildcard patterns", () => {
-      const filter = new Filter([], ["browser_*"]);
+      const filter = new Filter([{ type: "include", pattern: "browser_*" }]);
 
       expect(filter.shouldExclude("browser_navigate")).toBe(false);
       expect(filter.shouldExclude("browser_click")).toBe(false);
-      expect(filter.shouldExclude("page_screenshot")).toBe(true);
+      expect(filter.shouldExclude("page_screenshot")).toBe(true); // not in whitelist
     });
 
     it("should allow multiple include patterns", () => {
-      const filter = new Filter([], ["browser_*", "page_*"]);
+      const filter = new Filter([
+        { type: "include", pattern: "browser_*" },
+        { type: "include", pattern: "page_*" },
+      ]);
 
       expect(filter.shouldExclude("browser_navigate")).toBe(false);
       expect(filter.shouldExclude("page_screenshot")).toBe(false);
-      expect(filter.shouldExclude("console_log")).toBe(true);
+      expect(filter.shouldExclude("console_log")).toBe(true); // not in whitelist
     });
   });
 
-  describe("shouldExclude - combination mode", () => {
-    it("should exclude excluded tools even if included", () => {
-      const filter = new Filter(["browser_close"], ["browser_*"]);
+  describe("rsync-style: order matters, first match wins", () => {
+    it("include then exclude - exclude wins for matching item", () => {
+      const filter = new Filter([
+        { type: "include", pattern: "browser_*" },
+        { type: "exclude", pattern: "browser_close" },
+      ]);
 
-      expect(filter.shouldExclude("browser_navigate")).toBe(false);
-      expect(filter.shouldExclude("browser_screenshot")).toBe(false);
-      expect(filter.shouldExclude("browser_close")).toBe(true); // exclude wins
-      expect(filter.shouldExclude("other_tool")).toBe(true); // not included
+      expect(filter.shouldExclude("browser_navigate")).toBe(false); // matches include
+      expect(filter.shouldExclude("browser_close")).toBe(false); // matches include first!
+      expect(filter.shouldExclude("other_tool")).toBe(true); // not in whitelist
     });
 
-    it("should handle multiple patterns in both lists", () => {
-      const filter = new Filter(
-        ["browser_close", "browser_evaluate"],
-        ["browser_*", "page_*"]
-      );
+    it("exclude then include - exclude wins for matching item", () => {
+      const filter = new Filter([
+        { type: "exclude", pattern: "browser_close" },
+        { type: "include", pattern: "browser_*" },
+      ]);
 
-      expect(filter.shouldExclude("browser_navigate")).toBe(false); // included
-      expect(filter.shouldExclude("browser_close")).toBe(true); // excluded
-      expect(filter.shouldExclude("browser_evaluate")).toBe(true); // excluded
-      expect(filter.shouldExclude("page_screenshot")).toBe(false); // included
-      expect(filter.shouldExclude("console_log")).toBe(true); // not included
+      expect(filter.shouldExclude("browser_navigate")).toBe(false); // matches include
+      expect(filter.shouldExclude("browser_close")).toBe(true); // matches exclude first!
+      expect(filter.shouldExclude("other_tool")).toBe(true); // not in whitelist
     });
 
-    it("should handle complex patterns", () => {
-      const filter = new Filter(
-        ["*_admin", "*_debug"],
-        ["browser_*", "safe_*"]
-      );
+    it("complex layering: include, exclude, include more specific", () => {
+      const filter = new Filter([
+        { type: "include", pattern: "browser_*" },
+        { type: "exclude", pattern: "browser_close*" },
+        { type: "include", pattern: "browser_close_tab" },
+      ]);
+
+      expect(filter.shouldExclude("browser_navigate")).toBe(false); // matches first include
+      expect(filter.shouldExclude("browser_close")).toBe(false); // matches first include (browser_*)
+      expect(filter.shouldExclude("browser_close_tab")).toBe(false); // matches first include (browser_*)
+      expect(filter.shouldExclude("browser_close_window")).toBe(false); // matches first include (browser_*)
+    });
+
+    it("complex layering: exclude specific, then include broad", () => {
+      const filter = new Filter([
+        { type: "exclude", pattern: "browser_close" },
+        { type: "exclude", pattern: "browser_evaluate" },
+        { type: "include", pattern: "browser_*" },
+      ]);
+
+      expect(filter.shouldExclude("browser_navigate")).toBe(false); // matches include
+      expect(filter.shouldExclude("browser_close")).toBe(true); // matches exclude first
+      expect(filter.shouldExclude("browser_evaluate")).toBe(true); // matches exclude first
+      expect(filter.shouldExclude("other_tool")).toBe(true); // not in whitelist
+    });
+
+    it("multiple patterns with different precedence", () => {
+      const filter = new Filter([
+        { type: "exclude", pattern: "*_admin" },
+        { type: "exclude", pattern: "*_debug" },
+        { type: "include", pattern: "browser_*" },
+        { type: "include", pattern: "safe_*" },
+      ]);
 
       expect(filter.shouldExclude("browser_navigate")).toBe(false);
       expect(filter.shouldExclude("browser_admin")).toBe(true); // exclude wins
       expect(filter.shouldExclude("safe_tool")).toBe(false);
       expect(filter.shouldExclude("safe_debug")).toBe(true); // exclude wins
-      expect(filter.shouldExclude("unsafe_tool")).toBe(true); // not included
+      expect(filter.shouldExclude("unsafe_tool")).toBe(true); // not in whitelist
     });
   });
 
   describe("filterList", () => {
     it("should filter items by name", () => {
-      const filter = new Filter(["test*"]);
+      const filter = new Filter([{ type: "exclude", pattern: "test*" }]);
       const items = [
         { name: "test_one", value: 1 },
         { name: "keep_this", value: 2 },
@@ -134,7 +173,7 @@ describe("Filter", () => {
     });
 
     it("should preserve all items when no patterns match", () => {
-      const filter = new Filter(["nonexistent"]);
+      const filter = new Filter([{ type: "exclude", pattern: "nonexistent" }]);
       const items = [
         { name: "tool1", desc: "a" },
         { name: "tool2", desc: "b" },
@@ -146,7 +185,7 @@ describe("Filter", () => {
     });
 
     it("should filter all items when pattern matches all", () => {
-      const filter = new Filter(["*"]);
+      const filter = new Filter([{ type: "exclude", pattern: "*" }]);
       const items = [{ name: "tool1" }, { name: "tool2" }, { name: "tool3" }];
 
       const result = filter.filterList(items);
@@ -155,10 +194,26 @@ describe("Filter", () => {
     });
 
     it("should handle empty item list", () => {
-      const filter = new Filter(["test*"]);
+      const filter = new Filter([{ type: "exclude", pattern: "test*" }]);
       const result = filter.filterList([]);
 
       expect(result).toEqual([]);
+    });
+
+    it("should handle include mode with filterList", () => {
+      const filter = new Filter([{ type: "include", pattern: "browser_*" }]);
+      const items = [
+        { name: "browser_navigate" },
+        { name: "page_screenshot" },
+        { name: "browser_click" },
+      ];
+
+      const result = filter.filterList(items);
+
+      expect(result).toEqual([
+        { name: "browser_navigate" },
+        { name: "browser_click" },
+      ]);
     });
   });
 });

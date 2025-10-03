@@ -12,8 +12,7 @@ describe("CLI Parser", () => {
         "server.js",
       ]);
 
-      expect(result.excludePatterns).toEqual(["test*"]);
-      expect(result.includePatterns).toEqual([]);
+      expect(result.patterns).toEqual([{ type: "exclude", pattern: "test*" }]);
       expect(result.upstreamCommand).toEqual(["node", "server.js"]);
     });
 
@@ -28,8 +27,10 @@ describe("CLI Parser", () => {
         "my-server",
       ]);
 
-      expect(result.excludePatterns).toEqual(["playwright*", "debug_*"]);
-      expect(result.includePatterns).toEqual([]);
+      expect(result.patterns).toEqual([
+        { type: "exclude", pattern: "playwright*" },
+        { type: "exclude", pattern: "debug_*" },
+      ]);
       expect(result.upstreamCommand).toEqual(["npx", "my-server"]);
     });
 
@@ -69,8 +70,9 @@ describe("CLI Parser", () => {
         "server.js",
       ]);
 
-      expect(result.excludePatterns).toEqual([]);
-      expect(result.includePatterns).toEqual(["browser_*"]);
+      expect(result.patterns).toEqual([
+        { type: "include", pattern: "browser_*" },
+      ]);
       expect(result.upstreamCommand).toEqual(["node", "server.js"]);
     });
 
@@ -85,10 +87,9 @@ describe("CLI Parser", () => {
         "my-server",
       ]);
 
-      expect(result.excludePatterns).toEqual([]);
-      expect(result.includePatterns).toEqual([
-        "browser_navigate",
-        "browser_screenshot",
+      expect(result.patterns).toEqual([
+        { type: "include", pattern: "browser_navigate" },
+        { type: "include", pattern: "browser_screenshot" },
       ]);
       expect(result.upstreamCommand).toEqual(["npx", "my-server"]);
     });
@@ -100,8 +101,8 @@ describe("CLI Parser", () => {
     });
   });
 
-  describe("parseArgs - combination", () => {
-    it("should parse both exclude and include patterns", () => {
+  describe("parseArgs - combination (rsync-style: order matters)", () => {
+    it("should preserve pattern order: include then exclude", () => {
       const result = parseArgs([
         "--include",
         "browser_*",
@@ -114,15 +115,33 @@ describe("CLI Parser", () => {
         "server.js",
       ]);
 
-      expect(result.excludePatterns).toEqual([
-        "browser_close",
-        "browser_evaluate",
+      expect(result.patterns).toEqual([
+        { type: "include", pattern: "browser_*" },
+        { type: "exclude", pattern: "browser_close" },
+        { type: "exclude", pattern: "browser_evaluate" },
       ]);
-      expect(result.includePatterns).toEqual(["browser_*"]);
       expect(result.upstreamCommand).toEqual(["node", "server.js"]);
     });
 
-    it("should handle patterns in any order", () => {
+    it("should preserve pattern order: exclude then include", () => {
+      const result = parseArgs([
+        "--exclude",
+        "browser_close",
+        "--include",
+        "browser_*",
+        "--",
+        "node",
+        "server.js",
+      ]);
+
+      expect(result.patterns).toEqual([
+        { type: "exclude", pattern: "browser_close" },
+        { type: "include", pattern: "browser_*" },
+      ]);
+      expect(result.upstreamCommand).toEqual(["node", "server.js"]);
+    });
+
+    it("should handle patterns in any order (preserving exact order)", () => {
       const result = parseArgs([
         "--exclude",
         "test1",
@@ -136,8 +155,31 @@ describe("CLI Parser", () => {
         "cmd",
       ]);
 
-      expect(result.excludePatterns).toEqual(["test1", "test2"]);
-      expect(result.includePatterns).toEqual(["allow1", "allow2"]);
+      expect(result.patterns).toEqual([
+        { type: "exclude", pattern: "test1" },
+        { type: "include", pattern: "allow1" },
+        { type: "exclude", pattern: "test2" },
+        { type: "include", pattern: "allow2" },
+      ]);
+    });
+
+    it("should handle complex rsync-style pattern ordering", () => {
+      const result = parseArgs([
+        "--include",
+        "browser_*",
+        "--exclude",
+        "browser_close*",
+        "--include",
+        "browser_close_tab",
+        "--",
+        "cmd",
+      ]);
+
+      expect(result.patterns).toEqual([
+        { type: "include", pattern: "browser_*" },
+        { type: "exclude", pattern: "browser_close*" },
+        { type: "include", pattern: "browser_close_tab" },
+      ]);
     });
   });
 
@@ -145,8 +187,7 @@ describe("CLI Parser", () => {
     it("should handle no filter patterns", () => {
       const result = parseArgs(["--", "node", "server.js"]);
 
-      expect(result.excludePatterns).toEqual([]);
-      expect(result.includePatterns).toEqual([]);
+      expect(result.patterns).toEqual([]);
       expect(result.upstreamCommand).toEqual(["node", "server.js"]);
     });
 
