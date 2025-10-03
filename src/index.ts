@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { parseArgs } from './cli.js';
-import { Filter } from './filter.js';
-import { ProxyServer } from './proxy.js';
+import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { parseArgs } from "./cli.js";
+import { Filter } from "./filter.js";
+import { ProxyServer } from "./proxy.js";
 
 async function main() {
   // Parse command line arguments
@@ -16,25 +16,47 @@ async function main() {
     config = parseArgs(args);
   } catch (error) {
     console.error(`Error: ${(error as Error).message}`);
-    console.error('Usage: mcp-filter [--disable <pattern>]... -- <upstream-command> [args...]');
-    console.error('Example: mcp-filter --disable "playwright*" -- npx @playwright/mcp');
+    console.error(
+      "Usage: mcp-filter [--exclude <pattern>]... [--include <pattern>]... -- <upstream-command> [args...]"
+    );
+    console.error("Examples:");
+    console.error(
+      '  mcp-filter --exclude "playwright*" -- npx @playwright/mcp'
+    );
+    console.error(
+      '  mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp'
+    );
+    console.error(
+      '  mcp-filter --include "browser_*" --exclude "browser_close" -- npx @playwright/mcp'
+    );
     process.exit(1);
   }
 
-  console.error(`Starting MCP filter with ${config.disablePatterns.length} pattern(s)`);
-  config.disablePatterns.forEach(p => console.error(`  Disable: ${p}`));
+  console.error(
+    `Starting MCP filter with ${
+      config.excludePatterns.length + config.includePatterns.length
+    } pattern(s)`
+  );
+  config.excludePatterns.forEach((p) => console.error(`  Exclude: ${p}`));
+  config.includePatterns.forEach((p) => console.error(`  Include: ${p}`));
+
+  if (config.includePatterns.length > 0 && config.excludePatterns.length > 0) {
+    console.error(
+      "Warning: Using both --include and --exclude. Exclude patterns take precedence."
+    );
+  }
 
   // Spawn upstream server
   const upstreamProcess = spawnUpstream(config.upstreamCommand);
 
   // Create filter
-  const filter = new Filter(config.disablePatterns);
+  const filter = new Filter(config.excludePatterns, config.includePatterns);
 
   // Create proxy server
   const proxy = new ProxyServer(
     {
-      name: 'mcp-filter',
-      version: '0.1.0',
+      name: "mcp-filter",
+      version: "0.1.0",
     },
     filter
   );
@@ -43,46 +65,46 @@ async function main() {
   const clientTransport = new StdioClientTransport({
     command: config.upstreamCommand[0],
     args: config.upstreamCommand.slice(1),
-    stderr: 'pipe',
+    stderr: "pipe",
   });
 
   await proxy.getClient().connect(clientTransport);
-  console.error('Connected to upstream server');
+  console.error("Connected to upstream server");
 
   // Connect server to current process stdio (for the MCP client calling us)
   const serverTransport = new StdioServerTransport();
   await proxy.getServer().connect(serverTransport);
-  console.error('MCP filter proxy ready');
+  console.error("MCP filter proxy ready");
 
   // Handle cleanup
   const cleanup = () => {
-    console.error('Shutting down...');
+    console.error("Shutting down...");
     upstreamProcess.kill();
     process.exit(0);
   };
 
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
 }
 
 function spawnUpstream(command: string[]): ChildProcessWithoutNullStreams {
   const [cmd, ...args] = command;
 
   const proc = spawn(cmd, args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ["pipe", "pipe", "pipe"],
   });
 
   // Forward stderr to our stderr
-  proc.stderr.on('data', (data) => {
+  proc.stderr.on("data", (data) => {
     process.stderr.write(data);
   });
 
-  proc.on('error', (error) => {
+  proc.on("error", (error) => {
     console.error(`Failed to start upstream server: ${error.message}`);
     process.exit(1);
   });
 
-  proc.on('exit', (code) => {
+  proc.on("exit", (code) => {
     console.error(`Upstream server exited with code ${code}`);
     process.exit(code || 0);
   });
@@ -91,6 +113,6 @@ function spawnUpstream(command: string[]): ChildProcessWithoutNullStreams {
 }
 
 main().catch((error) => {
-  console.error('Fatal error:', error);
+  console.error("Fatal error:", error);
   process.exit(1);
 });

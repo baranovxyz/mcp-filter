@@ -15,21 +15,65 @@ npx mcp-filter [options] -- <upstream-command>
 
 ## Usage
 
-```bash
-# Filter out playwright tools
-npx mcp-filter --disable "playwright*" -- npx @playwright/mcp
+### Basic Usage
 
-# Filter multiple patterns
-npx mcp-filter --disable "playwright*" --disable "unsafe_*" -- npx @playwright/mcp
+```bash
+# Exclude mode: filter out specific tools
+npx mcp-filter --exclude "playwright*" -- npx @playwright/mcp
+
+# Include mode: only allow specific tools
+npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp
+
+# Combination: include with exceptions
+npx mcp-filter --include "browser_*" --exclude "browser_close" -- npx @playwright/mcp
+
+# Multiple patterns
+npx mcp-filter --exclude "playwright*" --exclude "unsafe_*" -- npx @playwright/mcp
 
 # Use with any MCP server
-npx mcp-filter --disable "debug*" -- node my-mcp-server.js
+npx mcp-filter --exclude "debug*" -- node my-mcp-server.js
 ```
 
 ## Options
 
-- `--disable <pattern>` - Glob pattern for tools/resources/prompts to disable (can be specified multiple times)
+- `--exclude <pattern>` - Exclude tools/resources/prompts matching this pattern (like rsync --exclude)
+- `--include <pattern>` - Include ONLY tools/resources/prompts matching this pattern (like rsync --include)
 - `--` - Separates filter options from upstream server command
+
+Both options can be specified multiple times and combined together.
+
+## Filtering Modes
+
+### Exclude Mode (--exclude only)
+
+Blocks specific items, allows everything else:
+
+```bash
+# Block browser_close and browser_evaluate tools
+npx mcp-filter --exclude "browser_close" --exclude "browser_evaluate" -- npx @playwright/mcp
+```
+
+### Include Mode (--include only)
+
+Allows ONLY specified items, blocks everything else:
+
+```bash
+# Only allow safe, read-only browser tools
+npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp
+```
+
+### Combination Mode (--include + --exclude)
+
+Include patterns with exceptions. **Exclude patterns always take precedence** (same as rsync):
+
+```bash
+# Allow all browser tools EXCEPT close and evaluate
+npx mcp-filter --include "browser_*" --exclude "browser_close" --exclude "browser_evaluate" -- npx @playwright/mcp
+```
+
+**Precedence Rule:** `--exclude` > `--include` > default allow
+
+When a tool matches both `--include` and `--exclude`, it will be **excluded** (rsync-style behavior).
 
 ## Pattern Examples
 
@@ -37,10 +81,13 @@ npx mcp-filter --disable "debug*" -- node my-mcp-server.js
 - `*_admin` - Match all items ending with "\_admin"
 - `test_*_debug` - Match items with pattern in middle
 - `exact_name` - Match exact name
+- `browser_*` - Match all browser-related tools
 
 ## Using with Cursor IDE
 
 Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
+
+### Example 1: Exclude dangerous tools
 
 ```json
 {
@@ -49,7 +96,55 @@ Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
       "command": "npx",
       "args": [
         "mcp-filter",
-        "--disable",
+        "--exclude",
+        "browser_close",
+        "--exclude",
+        "browser_evaluate",
+        "--",
+        "npx",
+        "@playwright/mcp@latest"
+      ]
+    }
+  }
+}
+```
+
+### Example 2: Include safe tools only
+
+```json
+{
+  "mcpServers": {
+    "playwright-safe": {
+      "command": "npx",
+      "args": [
+        "mcp-filter",
+        "--include",
+        "browser_navigate",
+        "--include",
+        "browser_screenshot",
+        "--include",
+        "browser_snapshot",
+        "--",
+        "npx",
+        "@playwright/mcp@latest"
+      ]
+    }
+  }
+}
+```
+
+### Example 3: Include category with exceptions
+
+```json
+{
+  "mcpServers": {
+    "playwright-filtered": {
+      "command": "npx",
+      "args": [
+        "mcp-filter",
+        "--include",
+        "browser_*",
+        "--exclude",
         "browser_close",
         "--",
         "npx",

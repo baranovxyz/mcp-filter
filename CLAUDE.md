@@ -40,10 +40,13 @@ pnpm test tests/integration/
 pnpm run build
 
 # Test with the included test server
-./dist/index.js --disable "playwright*" -- npx tsx test-server.ts
+./dist/index.js --exclude "playwright*" -- npx tsx test-server.ts
 
 # Test with multiple patterns
-./dist/index.js --disable "test*" --disable "blocked_*" -- npx tsx test-server.ts
+./dist/index.js --exclude "test*" --exclude "blocked_*" -- npx tsx test-server.ts
+
+# Test include mode
+./dist/index.js --include "browser_*" --exclude "browser_close" -- npx tsx test-server.ts
 ```
 
 ## Architecture
@@ -51,14 +54,16 @@ pnpm run build
 ### Three-Layer Proxy Design
 
 1. **CLI Layer** (`src/cli.ts`)
-   - Parses `--disable <pattern>` arguments
+
+   - Parses `--exclude <pattern>` and `--include <pattern>` arguments (rsync-style)
    - Extracts upstream command after `--` separator
    - Returns `FilterConfig` with patterns and command
 
 2. **Filter Engine** (`src/filter.ts`)
+
    - Uses `minimatch` for glob pattern matching
    - Filters MCP items (tools/resources/prompts) by name
-   - Simple API: `shouldDisable(name)` and `filterList(items)`
+   - Simple API: `shouldExclude(name)` and `filterList(items)`
 
 3. **Proxy Server** (`src/proxy.ts`)
    - **Dual role**: Acts as both MCP client (to upstream) and MCP server (to caller)
@@ -79,8 +84,9 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
 - **Subprocess management**: `index.ts` spawns upstream server as child process
 - **Filtering strategy**:
   - `tools/list`, `resources/list`, `prompts/list` → filter response before returning
-  - `tools/call`, `prompts/get` → block if name matches disabled pattern
+  - `tools/call`, `prompts/get` → block if name matches excluded pattern
   - `resources/read` → forwarded (cannot filter by URI easily)
+  - Precedence: `--exclude` > `--include` > default allow (rsync-style)
 
 ## Code Organization
 

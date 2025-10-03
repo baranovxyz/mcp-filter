@@ -1,5 +1,5 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
@@ -7,18 +7,15 @@ import {
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import { Filter } from './filter.js';
+} from "@modelcontextprotocol/sdk/types.js";
+import { Filter } from "./filter.js";
 
 export class ProxyServer {
   private server: Server;
   private client: Client;
   private filter: Filter;
 
-  constructor(
-    serverInfo: { name: string; version: string },
-    filter: Filter
-  ) {
+  constructor(serverInfo: { name: string; version: string }, filter: Filter) {
     this.filter = filter;
     this.client = new Client(
       {
@@ -30,16 +27,13 @@ export class ProxyServer {
       }
     );
 
-    this.server = new Server(
-      serverInfo,
-      {
-        capabilities: {
-          tools: {},
-          resources: {},
-          prompts: {},
-        },
-      }
-    );
+    this.server = new Server(serverInfo, {
+      capabilities: {
+        tools: {},
+        resources: {},
+        prompts: {},
+      },
+    });
 
     this.setupHandlers();
   }
@@ -55,8 +49,8 @@ export class ProxyServer {
     });
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      if (this.filter.shouldDisable(request.params.name)) {
-        throw new Error(`Tool '${request.params.name}' is disabled by filter`);
+      if (this.filter.shouldExclude(request.params.name)) {
+        throw new Error(`Tool '${request.params.name}' is excluded by filter`);
       }
 
       return await this.client.callTool(request.params);
@@ -71,11 +65,14 @@ export class ProxyServer {
       };
     });
 
-    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-      // Resources are identified by URI, not name, so we can't easily filter calls
-      // We'll allow reads but they won't be in the list if filtered
-      return await this.client.readResource(request.params);
-    });
+    this.server.setRequestHandler(
+      ReadResourceRequestSchema,
+      async (request) => {
+        // Resources are identified by URI, not name, so we can't easily filter calls
+        // We'll allow reads but they won't be in the list if filtered
+        return await this.client.readResource(request.params);
+      }
+    );
 
     // Prompts
     this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
@@ -87,8 +84,10 @@ export class ProxyServer {
     });
 
     this.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-      if (this.filter.shouldDisable(request.params.name)) {
-        throw new Error(`Prompt '${request.params.name}' is disabled by filter`);
+      if (this.filter.shouldExclude(request.params.name)) {
+        throw new Error(
+          `Prompt '${request.params.name}' is excluded by filter`
+        );
       }
 
       return await this.client.getPrompt(request.params);

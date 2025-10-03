@@ -1,10 +1,12 @@
 export interface FilterConfig {
-  disablePatterns: string[];
+  excludePatterns: string[];
+  includePatterns: string[];
   upstreamCommand: string[];
 }
 
 export function parseArgs(args: string[]): FilterConfig {
-  const disablePatterns: string[] = [];
+  const excludePatterns: string[] = [];
+  const includePatterns: string[] = [];
   const upstreamCommand: string[] = [];
 
   let inUpstreamCommand = false;
@@ -17,17 +19,26 @@ export function parseArgs(args: string[]): FilterConfig {
       continue;
     }
 
-    if (arg === '--') {
+    if (arg === "--") {
       inUpstreamCommand = true;
       continue;
     }
 
-    if (arg === '--disable') {
+    if (arg === "--exclude") {
       const pattern = args[++i];
       if (!pattern) {
-        throw new Error('--disable requires a pattern argument');
+        throw new Error("--exclude requires a pattern argument");
       }
-      disablePatterns.push(pattern);
+      excludePatterns.push(pattern);
+      continue;
+    }
+
+    if (arg === "--include") {
+      const pattern = args[++i];
+      if (!pattern) {
+        throw new Error("--include requires a pattern argument");
+      }
+      includePatterns.push(pattern);
       continue;
     }
 
@@ -35,11 +46,14 @@ export function parseArgs(args: string[]): FilterConfig {
   }
 
   if (upstreamCommand.length === 0) {
-    throw new Error('No upstream command specified. Use -- to separate filter args from upstream command');
+    throw new Error(
+      "No upstream command specified. Use -- to separate filter args from upstream command"
+    );
   }
 
   return {
-    disablePatterns,
-    upstreamCommand
+    excludePatterns,
+    includePatterns,
+    upstreamCommand,
   };
 }
