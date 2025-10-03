@@ -33,16 +33,20 @@ async function main() {
   }
 
   console.error(
-    `Starting MCP filter with ${
-      config.excludePatterns.length + config.includePatterns.length
-    } pattern(s)`
+    `Starting MCP filter with ${config.patterns.length} pattern(s)`
   );
-  config.excludePatterns.forEach((p) => console.error(`  Exclude: ${p}`));
-  config.includePatterns.forEach((p) => console.error(`  Include: ${p}`));
-
-  if (config.includePatterns.length > 0 && config.excludePatterns.length > 0) {
+  config.patterns.forEach((p) =>
     console.error(
-      "Warning: Using both --include and --exclude. Exclude patterns take precedence."
+      `  ${p.type === "include" ? "Include" : "Exclude"}: ${p.pattern}`
+    )
+  );
+
+  const hasInclude = config.patterns.some((p) => p.type === "include");
+  const hasExclude = config.patterns.some((p) => p.type === "exclude");
+
+  if (hasInclude && hasExclude) {
+    console.error(
+      "Note: Using rsync-style filtering - patterns evaluated in order, first match wins."
     );
   }
 
@@ -50,13 +54,13 @@ async function main() {
   const upstreamProcess = spawnUpstream(config.upstreamCommand);
 
   // Create filter
-  const filter = new Filter(config.excludePatterns, config.includePatterns);
+  const filter = new Filter(config.patterns);
 
   // Create proxy server
   const proxy = new ProxyServer(
     {
       name: "mcp-filter",
-      version: "0.1.0",
+      version: "0.2.0",
     },
     filter
   );

@@ -1,12 +1,15 @@
+export interface FilterPattern {
+  type: "include" | "exclude";
+  pattern: string;
+}
+
 export interface FilterConfig {
-  excludePatterns: string[];
-  includePatterns: string[];
+  patterns: FilterPattern[];
   upstreamCommand: string[];
 }
 
 export function parseArgs(args: string[]): FilterConfig {
-  const excludePatterns: string[] = [];
-  const includePatterns: string[] = [];
+  const patterns: FilterPattern[] = [];
   const upstreamCommand: string[] = [];
 
   let inUpstreamCommand = false;
@@ -29,7 +32,7 @@ export function parseArgs(args: string[]): FilterConfig {
       if (!pattern) {
         throw new Error("--exclude requires a pattern argument");
       }
-      excludePatterns.push(pattern);
+      patterns.push({ type: "exclude", pattern });
       continue;
     }
 
@@ -38,7 +41,7 @@ export function parseArgs(args: string[]): FilterConfig {
       if (!pattern) {
         throw new Error("--include requires a pattern argument");
       }
-      includePatterns.push(pattern);
+      patterns.push({ type: "include", pattern });
       continue;
     }
 
@@ -52,8 +55,7 @@ export function parseArgs(args: string[]): FilterConfig {
   }
 
   return {
-    excludePatterns,
-    includePatterns,
+    patterns,
     upstreamCommand,
   };
 }

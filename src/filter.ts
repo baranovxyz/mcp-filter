@@ -1,28 +1,26 @@
 import { minimatch } from "minimatch";
+import { FilterPattern } from "./cli.js";
 
 export class Filter {
-  constructor(
-    private excludePatterns: string[],
-    private includePatterns: string[] = []
-  ) {}
+  private hasIncludePatterns: boolean;
+
+  constructor(private patterns: FilterPattern[]) {
+    this.hasIncludePatterns = patterns.some((p) => p.type === "include");
+  }
 
   shouldExclude(name: string): boolean {
-    // Step 1: Check include patterns (if specified)
-    if (this.includePatterns.length > 0) {
-      const isIncluded = this.includePatterns.some((pattern) =>
-        minimatch(name, pattern)
-      );
-      if (!isIncluded) return true; // Not included = excluded
+    // Evaluate patterns in order - first match wins (rsync-style)
+    for (const pattern of this.patterns) {
+      if (minimatch(name, pattern.pattern)) {
+        // First pattern that matches determines the outcome
+        return pattern.type === "exclude";
+      }
     }
 
-    // Step 2: Check exclude patterns (explicit exclude always wins)
-    const isExcluded = this.excludePatterns.some((pattern) =>
-      minimatch(name, pattern)
-    );
-    if (isExcluded) return true;
-
-    // Step 3: Default allow
-    return false;
+    // No pattern matched - determine default behavior
+    // If there are include patterns, default is exclude (whitelist mode)
+    // Otherwise, default is include (allow all)
+    return this.hasIncludePatterns;
   }
 
   filterList<T extends { name: string }>(items: T[]): T[] {
