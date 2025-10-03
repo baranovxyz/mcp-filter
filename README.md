@@ -24,8 +24,8 @@ npx mcp-filter --exclude "playwright*" -- npx @playwright/mcp
 # Include mode: only allow specific tools
 npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp
 
-# Combination: include with exceptions
-npx mcp-filter --include "browser_*" --exclude "browser_close" -- npx @playwright/mcp
+# Combination: include with exceptions (order matters!)
+npx mcp-filter --exclude "browser_close" --include "browser_*" -- npx @playwright/mcp
 
 # Multiple patterns
 npx mcp-filter --exclude "playwright*" --exclude "unsafe_*" -- npx @playwright/mcp
@@ -68,18 +68,21 @@ npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- np
 
 **Rsync-style filtering**: patterns evaluated in order, first match wins.
 
+⚠️ **Common mistake**: Putting `--include` before `--exclude` means the exclude never applies!
+
 ```bash
-# Example 1: Include first, then exclude
+# Example 1: Include first, then exclude (DOES NOT WORK AS EXPECTED!)
 npx mcp-filter --include "browser_*" --exclude "browser_close" -- npx @playwright/mcp
 # Result: All browser_* tools are INCLUDED (browser_* matched first)
 # browser_close is also included because it matches browser_* first
+# The --exclude "browser_close" is never evaluated!
 
-# Example 2: Exclude first, then include (different result!)
+# Example 2: Exclude first, then include (CORRECT way to exclude exceptions!)
 npx mcp-filter --exclude "browser_close" --include "browser_*" -- npx @playwright/mcp
 # Result: browser_close is EXCLUDED (matched exclude first)
 # Other browser_* tools are included
 
-# Example 3: More specific patterns first
+# Example 3: Multiple exclusions, then broad include (recommended pattern)
 npx mcp-filter --exclude "browser_close" --exclude "browser_evaluate" --include "browser_*" -- npx @playwright/mcp
 # Result: browser_close and browser_evaluate excluded (matched first)
 # All other browser_* tools included
@@ -125,6 +128,139 @@ npx mcp-filter \
 # 2. browser_evaluate matches --exclude "browser_evaluate" first → excluded
 # 3. browser_navigate matches --include "browser_*" → included
 # 4. other_tool doesn't match any pattern, but --include exists → excluded (whitelist mode)
+```
+
+## Using with Claude Code
+
+### Adding Filtered MCP Servers
+
+Add filtered MCP servers to Claude Code using the `claude mcp add` command:
+
+```bash
+# Basic syntax
+claude mcp add <name> -- npx mcp-filter [filter-options] -- <upstream-command>
+
+# Example: Safe Playwright with read-only browser access
+claude mcp add playwright-safe -- \
+  npx mcp-filter \
+    --include "browser_navigate" \
+    --include "browser_screenshot" \
+    --include "browser_snapshot" \
+    -- npx @playwright/mcp@latest
+
+# Example: Block dangerous operations
+claude mcp add playwright-filtered -- \
+  npx mcp-filter \
+    --exclude "browser_close" \
+    --exclude "browser_evaluate" \
+    -- npx @playwright/mcp@latest
+
+# Example: Include category with exceptions (rsync-style)
+claude mcp add playwright -- \
+  npx mcp-filter \
+    --exclude "browser_close" \
+    --exclude "browser_evaluate" \
+    --include "browser_*" \
+    -- npx @playwright/mcp@latest
+```
+
+**Understanding the command structure:**
+
+- First `--` separates Claude's options from the mcp-filter command
+- Second `--` separates mcp-filter options from the upstream MCP server command
+
+### Scope Options
+
+Choose where to store the configuration:
+
+```bash
+# Local scope (default): Only you, only this project
+claude mcp add playwright-safe -- npx mcp-filter --include "browser_*" -- npx @playwright/mcp@latest
+
+# User scope: Available across all your projects
+claude mcp add --scope user playwright-safe -- \
+  npx mcp-filter --include "browser_*" -- npx @playwright/mcp@latest
+
+# Project scope: Share with team via .mcp.json (checked into git)
+claude mcp add --scope project playwright-safe -- \
+  npx mcp-filter --include "browser_*" -- npx @playwright/mcp@latest
+```
+
+**Security Note**: Claude Code prompts for approval before using project-scoped servers from `.mcp.json` files. To reset approval choices, use `claude mcp reset-project-choices`.
+
+### Managing Filtered Servers
+
+```bash
+# List all configured servers
+claude mcp list
+
+# Get details for a specific server
+claude mcp get playwright-safe
+
+# Remove a server
+claude mcp remove playwright-safe
+
+# Check server status in Claude Code
+/mcp
+```
+
+### Practical Examples
+
+**Monitoring agent (read-only)**
+
+```bash
+claude mcp add browser-monitor -- \
+  npx mcp-filter \
+    --include "browser_navigate" \
+    --include "browser_snapshot" \
+    --include "browser_console_messages" \
+    --include "browser_network_requests" \
+    --include "browser_take_screenshot" \
+    -- npx @playwright/mcp@latest
+```
+
+**Testing agent (no destructive actions)**
+
+```bash
+claude mcp add browser-test -- \
+  npx mcp-filter \
+    --exclude "browser_close" \
+    --exclude "browser_tabs" \
+    --exclude "browser_evaluate" \
+    --include "browser_*" \
+    -- npx @playwright/mcp@latest
+```
+
+Note: Exclude patterns must come BEFORE the include pattern to match first.
+
+**Production debugging (safe operations only)**
+
+```bash
+# Add as user-scoped for use across projects
+claude mcp add --scope user prod-debugger -- \
+  npx mcp-filter \
+    --exclude "browser_click" \
+    --exclude "browser_type" \
+    --exclude "browser_evaluate" \
+    --exclude "browser_fill_form" \
+    --include "browser_*" \
+    -- npx @playwright/mcp@latest
+```
+
+### Updating Server Configuration
+
+To update filter rules, remove and re-add the server:
+
+```bash
+# Remove existing configuration
+claude mcp remove playwright-safe
+
+# Add with new filter rules
+claude mcp add playwright-safe -- \
+  npx mcp-filter \
+    --include "browser_navigate" \
+    --include "browser_screenshot" \
+    -- npx @playwright/mcp@latest
 ```
 
 ## Using with Cursor IDE
