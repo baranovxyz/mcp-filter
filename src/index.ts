@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parseArgs } from "./cli.js";
@@ -50,9 +49,6 @@ async function main() {
     );
   }
 
-  // Spawn upstream server
-  const upstreamProcess = spawnUpstream(config.upstreamCommand);
-
   // Create filter
   const filter = new Filter(config.patterns);
 
@@ -66,10 +62,12 @@ async function main() {
   );
 
   // Connect client to upstream server via subprocess stdio
+  // StdioClientTransport spawns and manages the subprocess
   const clientTransport = new StdioClientTransport({
     command: config.upstreamCommand[0],
     args: config.upstreamCommand.slice(1),
-    stderr: "pipe",
+    env: process.env as Record<string, string>, // Pass current environment
+    stderr: "inherit", // Forward upstream stderr to our stderr
   });
 
   await proxy.getClient().connect(clientTransport);
@@ -83,37 +81,11 @@ async function main() {
   // Handle cleanup
   const cleanup = () => {
     console.error("Shutting down...");
-    upstreamProcess.kill();
     process.exit(0);
   };
 
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
-}
-
-function spawnUpstream(command: string[]): ChildProcessWithoutNullStreams {
-  const [cmd, ...args] = command;
-
-  const proc = spawn(cmd, args, {
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  // Forward stderr to our stderr
-  proc.stderr.on("data", (data) => {
-    process.stderr.write(data);
-  });
-
-  proc.on("error", (error) => {
-    console.error(`Failed to start upstream server: ${error.message}`);
-    process.exit(1);
-  });
-
-  proc.on("exit", (code) => {
-    console.error(`Upstream server exited with code ${code}`);
-    process.exit(code || 0);
-  });
-
-  return proc;
 }
 
 main().catch((error) => {
