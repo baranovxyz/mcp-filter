@@ -81,7 +81,12 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
 ### Key Implementation Details
 
 - **Transport**: Uses stdio for both upstream connection and client-facing interface
-- **Subprocess management**: `index.ts` spawns upstream server as child process
+- **Subprocess management**: Delegated entirely to `StdioClientTransport`
+  - **IMPORTANT**: Do NOT manually spawn subprocesses when using `StdioClientTransport`
+  - The transport handles process lifecycle automatically
+  - Always pass `env: process.env` to ensure commands like `npx` have access to PATH
+  - Use `stderr: "inherit"` for proper error forwarding
+  - **Anti-pattern**: Double-spawning (manual `spawn()` + transport spawning) causes connection failures
 - **Filtering strategy**:
   - `tools/list`, `resources/list`, `prompts/list` → filter response before returning
   - `tools/call`, `prompts/get` → block if name matches excluded pattern
@@ -107,7 +112,12 @@ tests/
 
 - **Framework**: Vitest (ESM-native, TypeScript, fast)
 - **Unit tests**: Test pure functions/classes in isolation
+  - Can verify architecture patterns by reading source files (see `tests/unit/index.test.ts`)
+  - Validate no anti-patterns exist (e.g., manual subprocess spawning)
 - **Integration tests**: Spawn actual MCP servers and test end-to-end communication
+  - Use `describe.sequential()` when spawning multiple MCP servers to avoid EPIPE race conditions
+  - Test with real-world MCP servers (e.g., chrome-devtools-mcp) to verify compatibility
+  - Each test should properly close clients to avoid resource leaks
 - **Fixtures**: `tests/fixtures/simple-server.ts` provides test MCP server with allowed/blocked tools
 
 ## MCP SDK Usage Patterns
@@ -133,6 +143,25 @@ When working with MCP SDK:
 - **No localization (`--locale`)**: English tool descriptions work well cross-lingually. See [docs/architecture-decisions.md](docs/architecture-decisions.md).
 - **Rsync-style filtering**: `--include`/`--exclude` patterns evaluated in order, first match wins. Familiar to Unix users.
 - **YAGNI approach**: Only implement features when users request them. See [docs/roadmap.md](docs/roadmap.md) for potential future features.
+
+## Debugging MCP Communication Issues
+
+Common issues and their solutions:
+
+- **Connection timeouts or "connection closed" errors**:
+  - Check for double-spawning (both manual `spawn()` and transport spawning)
+  - Verify `StdioClientTransport` is handling subprocess lifecycle
+  - Ensure no manual process management interferes with transport
+
+- **"Command not found" errors with `npx`**:
+  - Missing environment variables (especially PATH)
+  - Solution: Pass `env: process.env` to `StdioClientTransport`
+  - Verify environment is propagated to child processes
+
+- **EPIPE errors in tests**:
+  - Multiple tests spawning processes simultaneously
+  - Solution: Use `describe.sequential()` for integration test suites
+  - Ensure proper client cleanup with `await client.close()`
 
 ## Publishing
 

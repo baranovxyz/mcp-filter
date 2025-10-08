@@ -94,3 +94,63 @@ mcp-filter \
 
 - rsync man page: patterns evaluated in order
 - iptables: similar first-match-wins semantics
+
+## ADR-003: Delegate Subprocess Management to MCP SDK Transports
+
+**Status**: Implemented (2025-10-08)
+
+**Decision**: Let `StdioClientTransport` handle all subprocess spawning and lifecycle management. Do not manually spawn upstream MCP servers.
+
+**Context**:
+
+The initial implementation manually spawned the upstream MCP server process using Node's `spawn()`, then separately created a `StdioClientTransport` which also spawns a subprocess. This caused two processes to be spawned for the same upstream server, leading to connection failures.
+
+**Implementation**:
+
+```typescript
+// ✅ CORRECT: StdioClientTransport manages subprocess
+const clientTransport = new StdioClientTransport({
+  command: upstreamCommand[0],
+  args: upstreamCommand.slice(1),
+  env: process.env as Record<string, string>, // Pass full environment
+  stderr: "inherit", // Forward errors to parent
+});
+await client.connect(clientTransport);
+
+// ❌ WRONG: Manual spawning causes double-spawn
+const proc = spawn(upstreamCommand[0], upstreamCommand.slice(1));
+const clientTransport = new StdioClientTransport({ ... });
+// Now TWO processes are running!
+```
+
+**Key Requirements**:
+
+1. **Environment variables**: Always pass `env: process.env` to ensure commands like `npx` have access to PATH
+2. **Stderr forwarding**: Use `stderr: "inherit"` to forward upstream errors to parent process
+3. **No manual cleanup**: Remove `.kill()` calls - transport handles process termination
+4. **Single responsibility**: `index.ts` only configures transport, doesn't manage processes
+
+**Why this is correct**:
+
+- The MCP SDK's `StdioClientTransport` is designed to manage subprocess lifecycle
+- Proper environment propagation ensures `npx` and other shell commands work
+- Avoids race conditions and connection failures from double-spawning
+- Simpler code with fewer moving parts
+
+**Symptoms of double-spawning**:
+
+- Connection timeout errors
+- "MCP error -32000: Connection closed" immediately after connect
+- Upstream server starts but client can't communicate
+- Process hangs or exits unexpectedly
+
+**Testing**:
+
+- Integration tests verify single subprocess spawning (see `tests/integration/subprocess.test.ts`)
+- Unit tests validate no `spawn()` imports in `src/index.ts` (see `tests/unit/index.test.ts`)
+- Real-world compatibility tests with chrome-devtools-mcp verify environment passing works
+
+**References**:
+
+- MCP SDK documentation on StdioClientTransport
+- `tests/integration/subprocess.test.ts` - comprehensive test coverage documenting this pattern

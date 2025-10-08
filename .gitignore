@@ -7,3 +7,5 @@ coverage/
 
 # Local development references (not part of project)
 context/
+
+mcp.json
