@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { Filter } from "../../src/filter.js";
-import { FilterPattern } from "../../src/cli.js";
 
 describe("Filter - rsync-style", () => {
   describe("exclude mode only", () => {
@@ -100,7 +99,7 @@ describe("Filter - rsync-style", () => {
   });
 
   describe("rsync-style: order matters, first match wins", () => {
-    it("include then exclude - exclude wins for matching item", () => {
+    it("include then exclude - include wins because it matches first", () => {
       const filter = new Filter([
         { type: "include", pattern: "browser_*" },
         { type: "exclude", pattern: "browser_close" },
