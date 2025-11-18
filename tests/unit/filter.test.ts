@@ -11,6 +11,16 @@ describe("Filter - rsync-style", () => {
       expect(filter.shouldExclude("not_exact")).toBe(false);
     });
 
+    it("should exclude resolve-* pattern (context7 use case)", () => {
+      const filter = new Filter([{ type: "exclude", pattern: "resolve-*" }]);
+
+      expect(filter.shouldExclude("resolve-library-id")).toBe(true);
+      expect(filter.shouldExclude("resolve-dependencies")).toBe(true);
+      expect(filter.shouldExclude("resolve")).toBe(false); // exact match, no suffix
+      expect(filter.shouldExclude("get-library-docs")).toBe(false);
+      expect(filter.shouldExclude("search-packages")).toBe(false);
+    });
+
     it("should match wildcard patterns", () => {
       const filter = new Filter([{ type: "exclude", pattern: "playwright*" }]);
 

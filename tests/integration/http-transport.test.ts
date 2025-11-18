@@ -15,8 +15,50 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * NOTE: These tests require network access to external HTTP MCP servers.
  * They may be skipped in environments with network restrictions.
  */
-describe.sequential.skip("HTTP Transport Integration (requires network access)", () => {
+describe.sequential("HTTP Transport Integration (requires network access)", () => {
   const filterBin = path.resolve(__dirname, "../../dist/index.js");
+
+  it("should filter resolve-* tools from context7 (user config scenario)", async () => {
+    const client = new Client(
+      { name: "context7-filter-test", version: "1.0.0" },
+      { capabilities: {} }
+    );
+
+    // User's exact configuration: exclude resolve-* from context7
+    const transport = new StdioClientTransport({
+      command: "node",
+      args: [
+        filterBin,
+        "--exclude", "resolve-*",
+        "--upstream-url", "https://mcp.context7.com/mcp"
+      ],
+    });
+
+    await client.connect(transport);
+
+    const result = await client.listTools();
+    expect(result.tools).toBeDefined();
+    expect(Array.isArray(result.tools)).toBe(true);
+
+    console.log(`Context7 tools found: ${result.tools.length}`);
+    result.tools.forEach(tool => {
+      console.log(`  - ${tool.name}`);
+    });
+
+    // Verify no tools matching resolve-* pattern are present
+    const resolveTools = result.tools.filter(
+      (tool) => tool.name.match(/^resolve-/)
+    );
+    expect(resolveTools.length).toBe(0);
+
+    // Verify get-library-docs should still be present
+    const getLibraryDocs = result.tools.find(
+      (tool) => tool.name.includes("get-library-docs")
+    );
+    expect(getLibraryDocs).toBeDefined();
+
+    await client.close();
+  }, 15000);
 
   it("should connect to context7 HTTP MCP server and filter tools", async () => {
     const client = new Client(
@@ -32,7 +74,7 @@ describe.sequential.skip("HTTP Transport Integration (requires network access)",
         filterBin,
         "--exclude", "delete_*",
         "--exclude", "remove_*",
-        "--upstream-url", "https://context7.liam.sh/mcp"
+        "--upstream-url", "https://mcp.context7.com/mcp"
       ],
     });
 
@@ -67,7 +109,7 @@ describe.sequential.skip("HTTP Transport Integration (requires network access)",
       args: [
         filterBin,
         "--include", "search_*",
-        "--upstream-url", "https://context7.liam.sh/mcp"
+        "--upstream-url", "https://mcp.context7.com/mcp"
       ],
     });
 
@@ -100,7 +142,7 @@ describe.sequential.skip("HTTP Transport Integration (requires network access)",
       args: [
         filterBin,
         "--exclude", "admin_*",
-        "--upstream-url", "https://context7.liam.sh/mcp",
+        "--upstream-url", "https://mcp.context7.com/mcp",
         "--header", "X-Test-Header: test-value"
       ],
     });
