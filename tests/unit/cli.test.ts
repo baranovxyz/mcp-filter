@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { parseArgs } from "../../src/cli.js";
+import type { StdioConfig, HttpConfig, SseConfig } from "../../src/types.js";
 
 describe("CLI Parser", () => {
-  describe("parseArgs - exclude patterns", () => {
+  describe("parseArgs - stdio transport (command after --)", () => {
     it("should parse single exclude pattern", () => {
       const result = parseArgs([
         "--exclude",
@@ -13,7 +14,11 @@ describe("CLI Parser", () => {
       ]);
 
       expect(result.patterns).toEqual([{ type: "exclude", pattern: "test*" }]);
-      expect(result.upstreamCommand).toEqual(["node", "server.js"]);
+      expect(result.transportConfig.type).toBe("stdio");
+      expect((result.transportConfig as StdioConfig).command).toEqual([
+        "node",
+        "server.js",
+      ]);
     });
 
     it("should parse multiple exclude patterns", () => {
@@ -31,7 +36,11 @@ describe("CLI Parser", () => {
         { type: "exclude", pattern: "playwright*" },
         { type: "exclude", pattern: "debug_*" },
       ]);
-      expect(result.upstreamCommand).toEqual(["npx", "my-server"]);
+      expect(result.transportConfig.type).toBe("stdio");
+      expect((result.transportConfig as StdioConfig).command).toEqual([
+        "npx",
+        "my-server",
+      ]);
     });
 
     it("should parse upstream command with arguments", () => {
@@ -45,7 +54,7 @@ describe("CLI Parser", () => {
         "3000",
       ]);
 
-      expect(result.upstreamCommand).toEqual([
+      expect((result.transportConfig as StdioConfig).command).toEqual([
         "node",
         "server.js",
         "--port",
@@ -73,7 +82,11 @@ describe("CLI Parser", () => {
       expect(result.patterns).toEqual([
         { type: "include", pattern: "browser_*" },
       ]);
-      expect(result.upstreamCommand).toEqual(["node", "server.js"]);
+      expect(result.transportConfig.type).toBe("stdio");
+      expect((result.transportConfig as StdioConfig).command).toEqual([
+        "node",
+        "server.js",
+      ]);
     });
 
     it("should parse multiple include patterns", () => {
@@ -91,7 +104,11 @@ describe("CLI Parser", () => {
         { type: "include", pattern: "browser_navigate" },
         { type: "include", pattern: "browser_screenshot" },
       ]);
-      expect(result.upstreamCommand).toEqual(["npx", "my-server"]);
+      expect(result.transportConfig.type).toBe("stdio");
+      expect((result.transportConfig as StdioConfig).command).toEqual([
+        "npx",
+        "my-server",
+      ]);
     });
 
     it("should throw error if include has no pattern", () => {
@@ -120,7 +137,11 @@ describe("CLI Parser", () => {
         { type: "exclude", pattern: "browser_close" },
         { type: "exclude", pattern: "browser_evaluate" },
       ]);
-      expect(result.upstreamCommand).toEqual(["node", "server.js"]);
+      expect(result.transportConfig.type).toBe("stdio");
+      expect((result.transportConfig as StdioConfig).command).toEqual([
+        "node",
+        "server.js",
+      ]);
     });
 
     it("should preserve pattern order: exclude then include", () => {
@@ -138,7 +159,11 @@ describe("CLI Parser", () => {
         { type: "exclude", pattern: "browser_close" },
         { type: "include", pattern: "browser_*" },
       ]);
-      expect(result.upstreamCommand).toEqual(["node", "server.js"]);
+      expect(result.transportConfig.type).toBe("stdio");
+      expect((result.transportConfig as StdioConfig).command).toEqual([
+        "node",
+        "server.js",
+      ]);
     });
 
     it("should handle patterns in any order (preserving exact order)", () => {
@@ -188,12 +213,16 @@ describe("CLI Parser", () => {
       const result = parseArgs(["--", "node", "server.js"]);
 
       expect(result.patterns).toEqual([]);
-      expect(result.upstreamCommand).toEqual(["node", "server.js"]);
+      expect(result.transportConfig.type).toBe("stdio");
+      expect((result.transportConfig as StdioConfig).command).toEqual([
+        "node",
+        "server.js",
+      ]);
     });
 
-    it("should throw error if no upstream command", () => {
+    it("should throw error if no upstream server specified", () => {
       expect(() => parseArgs(["--exclude", "test"])).toThrow(
-        "No upstream command specified"
+        "No upstream server specified"
       );
     });
 
@@ -203,8 +232,123 @@ describe("CLI Parser", () => {
       );
     });
 
-    it("should handle empty upstream command after --", () => {
-      expect(() => parseArgs(["--"])).toThrow("No upstream command specified");
+    it("should handle empty command after --", () => {
+      expect(() => parseArgs(["--"])).toThrow("No upstream server specified");
+    });
+  });
+
+  describe("parseArgs - HTTP transport", () => {
+    it("should parse HTTP URL", () => {
+      const result = parseArgs([
+        "--exclude",
+        "test*",
+        "--upstream-url",
+        "https://mcp.example.com/mcp",
+      ]);
+
+      expect(result.patterns).toEqual([{ type: "exclude", pattern: "test*" }]);
+      expect(result.transportConfig.type).toBe("http");
+      expect((result.transportConfig as HttpConfig).url).toBe(
+        "https://mcp.example.com/mcp"
+      );
+    });
+
+    it("should parse HTTP URL with headers", () => {
+      const result = parseArgs([
+        "--upstream-url",
+        "https://api.example.com/mcp",
+        "--header",
+        "Authorization: Bearer token123",
+        "--header",
+        "X-Custom-Header: value",
+      ]);
+
+      expect(result.transportConfig.type).toBe("http");
+      expect((result.transportConfig as HttpConfig).headers).toEqual({
+        Authorization: "Bearer token123",
+        "X-Custom-Header": "value",
+      });
+    });
+
+    it("should throw error for invalid URL", () => {
+      expect(() => parseArgs(["--upstream-url", "not-a-url"])).toThrow(
+        "Invalid URL"
+      );
+    });
+
+    it("should throw error if --header used without --upstream-url", () => {
+      expect(() =>
+        parseArgs(["--header", "Auth: token", "--", "node", "server.js"])
+      ).toThrow("--header can only be used with --upstream-url");
+    });
+
+    it("should throw error if both --upstream-url and command specified", () => {
+      expect(() =>
+        parseArgs([
+          "--upstream-url",
+          "https://example.com",
+          "--",
+          "node",
+          "server.js",
+        ])
+      ).toThrow("Cannot specify both --upstream-url and command after --");
+    });
+  });
+
+  describe("parseArgs - SSE transport", () => {
+    it("should parse SSE URL with explicit transport flag", () => {
+      const result = parseArgs([
+        "--transport",
+        "sse",
+        "--upstream-url",
+        "https://mcp.example.com/sse",
+      ]);
+
+      expect(result.transportConfig.type).toBe("sse");
+      expect((result.transportConfig as SseConfig).url).toBe(
+        "https://mcp.example.com/sse"
+      );
+    });
+
+    it("should parse SSE URL with headers", () => {
+      const result = parseArgs([
+        "--transport",
+        "sse",
+        "--upstream-url",
+        "https://api.example.com/sse",
+        "--header",
+        "X-API-Key: secret",
+      ]);
+
+      expect(result.transportConfig.type).toBe("sse");
+      expect((result.transportConfig as SseConfig).headers).toEqual({
+        "X-API-Key": "secret",
+      });
+    });
+  });
+
+  describe("parseArgs - transport flag validation", () => {
+    it("should throw error for invalid transport type", () => {
+      expect(() =>
+        parseArgs(["--transport", "websocket", "--upstream-url", "ws://example.com"])
+      ).toThrow("Invalid transport type");
+    });
+
+    it("should throw error if --transport stdio used with --upstream-url", () => {
+      expect(() =>
+        parseArgs([
+          "--transport",
+          "stdio",
+          "--upstream-url",
+          "https://example.com",
+        ])
+      ).toThrow("--transport stdio cannot be used with --upstream-url");
+    });
+
+    it("should throw error if --transport http used without --upstream-url", () => {
+      expect(() =>
+        parseArgs(["--transport", "http", "--", "node", "server.js"])
+      ).toThrow("--transport http requires --upstream-url");
     });
   });
 });
