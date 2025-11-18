@@ -39,7 +39,7 @@ pnpm test tests/integration/
 # Build first
 pnpm run build
 
-# Test with the included test server
+# Test with local stdio server
 ./dist/index.js --exclude "playwright*" -- npx tsx test-server.ts
 
 # Test with multiple patterns
@@ -47,47 +47,90 @@ pnpm run build
 
 # Test include mode
 ./dist/index.js --include "browser_*" --exclude "browser_close" -- npx tsx test-server.ts
+
+# Test with HTTP transport (remote servers)
+./dist/index.js --exclude "delete_*" --upstream-url https://mcp.example.com/mcp
+
+# Test with custom headers
+./dist/index.js --exclude "admin_*" \
+  --upstream-url https://api.example.com/mcp \
+  --header "Authorization: Bearer token123"
 ```
 
 ## Architecture
 
-### Three-Layer Proxy Design
+### Four-Layer Proxy Design
 
 1. **CLI Layer** (`src/cli.ts`)
 
    - Parses `--exclude <pattern>` and `--include <pattern>` arguments (rsync-style)
-   - Extracts upstream command after `--` separator
-   - Returns `FilterConfig` with patterns and command
+   - Parses transport options: `--upstream-url`, `--transport`, `--header`
+   - Returns `FilterConfig` with patterns and `transportConfig`
+   - Supports both stdio (local servers) and HTTP/SSE (remote servers)
 
-2. **Filter Engine** (`src/filter.ts`)
+2. **Transport Factory** (`src/transport.ts`)
+
+   - Creates appropriate client transport based on configuration
+   - **Stdio**: `StdioClientTransport` for local subprocess servers
+   - **HTTP**: `StreamableHTTPClientTransport` for remote HTTP servers
+   - **SSE**: `SSEClientTransport` for legacy SSE servers (deprecated)
+   - Handles transport-specific configuration (headers, env vars, etc.)
+
+3. **Filter Engine** (`src/filter.ts`)
 
    - Uses `minimatch` for glob pattern matching
    - Filters MCP items (tools/resources/prompts) by name
    - Simple API: `shouldExclude(name)` and `filterList(items)`
+   - Transport-agnostic: works with any MCP protocol messages
 
-3. **Proxy Server** (`src/proxy.ts`)
+4. **Proxy Server** (`src/proxy.ts`)
    - **Dual role**: Acts as both MCP client (to upstream) and MCP server (to caller)
-   - **Client side**: Connects to upstream server via `StdioClientTransport`
+   - **Client side**: Connects to upstream via transport factory (stdio/HTTP/SSE)
    - **Server side**: Exposes filtered interface via `StdioServerTransport`
    - **Request handlers**: Intercepts list requests, applies filters, forwards call requests
+   - Fully transport-agnostic: works with any client transport type
 
 ### Data Flow
 
+#### Local Servers (Stdio)
 ```
 MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upstream MCP Server
-             ↑ stdio in/out                                          ↑ spawned subprocess
+             ↑ stdio in/out                  StdioClientTransport   ↑ spawned subprocess
+```
+
+#### Remote Servers (HTTP)
+```
+MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upstream MCP Server
+             ↑ stdio in/out                  StreamableHTTPClient   ↑ HTTPS connection
 ```
 
 ### Key Implementation Details
 
-- **Transport**: Uses stdio for both upstream connection and client-facing interface
-- **Subprocess management**: Delegated entirely to `StdioClientTransport`
+- **Multi-Transport Support**: Supports stdio, HTTP, and SSE transports
+  - **Upstream**: Transport factory (`src/transport.ts`) creates appropriate client transport
+  - **Downstream**: Always uses stdio for CLI compatibility
+  - **Auto-detection**: HTTP by default for URLs, stdio for commands
+
+- **Stdio Transport** (local servers):
+  - **Subprocess management**: Delegated entirely to `StdioClientTransport`
   - **IMPORTANT**: Do NOT manually spawn subprocesses when using `StdioClientTransport`
   - The transport handles process lifecycle automatically
   - Always pass `env: process.env` to ensure commands like `npx` have access to PATH
   - Use `stderr: "inherit"` for proper error forwarding
   - **Anti-pattern**: Double-spawning (manual `spawn()` + transport spawning) causes connection failures
-- **Filtering strategy**:
+
+- **HTTP Transport** (remote servers):
+  - Uses `StreamableHTTPClientTransport` from MCP SDK v1.10.0+
+  - Supports custom headers via `--header` flag
+  - Handles authentication, session management automatically
+  - Better scalability than SSE for production use
+
+- **SSE Transport** (deprecated):
+  - Supported for backward compatibility with legacy servers
+  - Displays deprecation warning when used
+  - Consider migrating to HTTP transport for new deployments
+
+- **Filtering strategy** (transport-agnostic):
   - `tools/list`, `resources/list`, `prompts/list` → filter response before returning
   - `tools/call`, `prompts/get` → block if name matches excluded pattern
   - `resources/read` → forwarded (cannot filter by URI easily)
@@ -97,14 +140,20 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
 
 ```
 src/
-├── index.ts      # Entry point: CLI parsing, subprocess spawning, transport wiring
+├── index.ts      # Entry point: CLI parsing, transport creation, proxy wiring
+├── types.ts      # Type definitions (FilterConfig, TransportConfig, etc.)
 ├── cli.ts        # Argument parser (pure function, well-tested)
+├── transport.ts  # Transport factory: creates stdio/HTTP/SSE transports
 ├── filter.ts     # Pattern matching logic (pure class, well-tested)
 └── proxy.ts      # ProxyServer class: dual MCP client/server
 
 tests/
-├── unit/         # Fast isolated tests (cli, filter)
-├── integration/  # Full MCP communication tests (proxy.test.ts)
+├── unit/         # Fast isolated tests (cli, filter, index architecture)
+├── integration/  # Full MCP communication tests
+│   ├── proxy.test.ts         # Core filtering integration tests
+│   ├── subprocess.test.ts    # Stdio transport & subprocess management
+│   ├── http-transport.test.ts # HTTP transport tests (requires network)
+│   └── readme-examples.test.ts # Validate README examples
 └── fixtures/     # Test helper servers (simple-server.ts)
 ```
 

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-11-18
+
+### Added
+- **Multi-Transport Support**: Filter both local and remote MCP servers
+  - HTTP transport for remote MCP servers (Streamable HTTP)
+  - SSE transport for legacy servers (deprecated, backward compatibility)
+  - Stdio transport for local servers (existing functionality, unchanged)
+- `--upstream-url <url>` flag to connect to remote HTTP/SSE servers
+- `--transport <type>` flag to explicitly specify transport type (stdio/http/sse)
+- `--header <header>` flag to add custom HTTP headers (e.g., authentication)
+- Transport factory pattern for clean separation of transport logic
+- HTTP transport integration tests with context7 public endpoint
+- Comprehensive CLI tests for new transport options
+
+### Changed
+- **Breaking**: `FilterConfig` now uses `transportConfig` instead of `upstreamCommand`
+- Upgraded `@modelcontextprotocol/sdk` from 1.0.4 to 1.22.0
+- Updated peerDependencies to require SDK >=1.10.0 (for HTTP transport)
+- CLI now auto-detects transport type (HTTP for URLs, stdio for commands)
+- Updated documentation with HTTP/SSE usage examples
+- Reorganized codebase with new `src/types.ts` and `src/transport.ts` modules
+
+### Fixed
+- Increased timeout for integration tests using `npx` to prevent flaky failures
+- Updated architecture validation tests for new transport factory pattern
+
 ## [0.4.0] - 2025-10-08
 
 ### Fixed
