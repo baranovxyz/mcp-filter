@@ -39,33 +39,28 @@ describe("Index Architecture", () => {
       expect(indexSource).not.toContain("const spawnUpstream");
     });
 
-    it("should use StdioClientTransport for subprocess management", () => {
-      // Verify we import and use StdioClientTransport
-      expect(indexSource).toContain(
-        'StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"'
-      );
+    it("should use transport factory for client transport", () => {
+      // Verify we import and use the transport factory
+      expect(indexSource).toContain('createClientTransport } from "./transport.js"');
 
-      // Verify we create a StdioClientTransport instance
-      expect(indexSource).toContain("new StdioClientTransport");
+      // Verify we create transport via factory
+      expect(indexSource).toContain("createClientTransport(config.transportConfig)");
     });
 
-    it("should pass environment variables to StdioClientTransport", () => {
-      // The fix includes passing env: process.env to ensure npx and other
-      // commands have access to PATH and other environment variables
+    it("should delegate subprocess management to transport layer", () => {
+      // The transport factory (in transport.ts) handles subprocess spawning
+      // for stdio transports, passing env and stderr configuration.
+      // The main index.ts should not handle these details directly.
 
-      expect(indexSource).toContain("env: process.env");
-    });
-
-    it("should configure stderr forwarding", () => {
-      // Verify stderr is configured to inherit (forward to parent process)
-      expect(indexSource).toMatch(/stderr:\s*["']inherit["']/);
+      // Verify we're using the transport config abstraction
+      expect(indexSource).toContain("config.transportConfig");
     });
   });
 
   describe("Transport Configuration", () => {
     it("should use both client and server transports", () => {
-      // Verify dual role: client to upstream, server to caller
-      expect(indexSource).toContain("StdioClientTransport");
+      // Verify dual role: client to upstream (via factory), server to caller (stdio)
+      expect(indexSource).toContain("createClientTransport");
       expect(indexSource).toContain("StdioServerTransport");
     });
 
@@ -113,9 +108,10 @@ describe("Index Architecture", () => {
   });
 
   describe("Configuration", () => {
-    it("should extract command and args from config", () => {
-      expect(indexSource).toContain("config.upstreamCommand[0]");
-      expect(indexSource).toContain("config.upstreamCommand.slice(1)");
+    it("should use transport config abstraction", () => {
+      // The new architecture uses config.transportConfig instead of
+      // directly accessing upstreamCommand
+      expect(indexSource).toContain("config.transportConfig");
     });
 
     it("should pass patterns to Filter", () => {

@@ -1,6 +1,6 @@
 {
   "name": "mcp-filter",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "MCP server proxy to filter tools, resources, and prompts from upstream MCP servers",
   "type": "module",
   "bin": {
@@ -40,10 +40,10 @@
     "minimatch": "10.0.1"
   },
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "1.0.0"
+    "@modelcontextprotocol/sdk": ">=1.10.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "1.0.4",
+    "@modelcontextprotocol/sdk": "1.22.0",
     "@types/node": "22.10.5",
     "@vitest/coverage-v8": "2.1.8",
     "typescript": "5.7.3",

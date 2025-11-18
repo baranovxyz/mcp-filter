@@ -15,7 +15,7 @@ npx mcp-filter [options] -- <upstream-command>
 
 ## Usage
 
-### Basic Usage
+### Local MCP Servers (Stdio Transport)
 
 ```bash
 # Exclude mode: filter out specific tools
@@ -30,17 +30,49 @@ npx mcp-filter --exclude "browser_close" --include "browser_*" -- npx @playwrigh
 # Multiple patterns
 npx mcp-filter --exclude "playwright*" --exclude "unsafe_*" -- npx @playwright/mcp
 
-# Use with any MCP server
+# Use with any local MCP server
 npx mcp-filter --exclude "debug*" -- node my-mcp-server.js
+```
+
+### Remote MCP Servers (HTTP/SSE Transport)
+
+```bash
+# Filter remote HTTP server (e.g., Notion, Stripe, Linear)
+npx mcp-filter --exclude "delete_*" --upstream-url https://mcp.notion.com/mcp
+
+# Filter with custom headers (authentication, etc.)
+npx mcp-filter --exclude "admin_*" \
+  --upstream-url https://api.example.com/mcp \
+  --header "Authorization: Bearer your-token-here"
+
+# SSE transport (deprecated, for legacy servers)
+npx mcp-filter --transport sse \
+  --upstream-url https://mcp.asana.com/sse \
+  --exclude "dangerous_*"
+
+# Complex filtering with remote servers
+npx mcp-filter \
+  --exclude "delete_*" \
+  --exclude "update_*" \
+  --include "read_*" \
+  --upstream-url https://mcp.example.com/mcp
 ```
 
 ## Options
 
+### Filtering Options
 - `--exclude <pattern>` - Exclude tools/resources/prompts matching this pattern
 - `--include <pattern>` - Include ONLY tools/resources/prompts matching this pattern (whitelist mode)
-- `--` - Separates filter options from upstream server command
 
-Both options can be specified multiple times and combined together.
+### Transport Options
+- `--upstream-url <url>` - Connect to remote HTTP/SSE server (instead of local command)
+- `--transport <type>` - Transport type: `stdio`, `http`, `sse` (auto-detected if omitted)
+- `--header <header>` - Add HTTP header (format: `"Key: Value"`, HTTP/SSE only, can be repeated)
+- `--` - Separates options from local server command (stdio mode only)
+
+**Note**: `--upstream-url` and `--` are mutually exclusive. Use `--upstream-url` for remote servers, or `-- <command>` for local servers.
+
+All options can be specified multiple times and combined together.
 
 **Filtering style:** rsync-style evaluation where patterns are evaluated in the order specified, and first match wins.
 

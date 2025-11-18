@@ -91,7 +91,7 @@ describe.sequential("Subprocess Management", () => {
       await expect(client.connect(transport)).resolves.not.toThrow();
 
       await client.close();
-    });
+    }, 10000); // Increase timeout to 10s for npx download
 
     it("should work with commands that depend on PATH environment variable", async () => {
       const client = new Client(
@@ -136,7 +136,7 @@ describe.sequential("Subprocess Management", () => {
       expect(result.tools.length).toBeGreaterThan(0);
 
       await client.close();
-    });
+    }, 10000); // Increase timeout to 10s for npx download
 
     it("should fail gracefully when upstream command is invalid", async () => {
       const client = new Client(
