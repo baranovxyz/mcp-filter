@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parseArgs } from "./cli.js";
 import { Filter } from "./filter.js";
 import { ProxyServer } from "./proxy.js";
+import { createClientTransport } from "./transport.js";
 
 async function main() {
   // Parse command line arguments
@@ -15,18 +15,42 @@ async function main() {
     config = parseArgs(args);
   } catch (error) {
     console.error(`Error: ${(error as Error).message}`);
+    console.error("");
+    console.error("Usage:");
     console.error(
-      "Usage: mcp-filter [--exclude <pattern>]... [--include <pattern>]... -- <upstream-command> [args...]"
+      "  mcp-filter [options] -- <command> [args...]           # stdio transport"
     );
+    console.error(
+      "  mcp-filter [options] --upstream-url <url>             # HTTP transport"
+    );
+    console.error("");
+    console.error("Options:");
+    console.error("  --exclude <pattern>     Exclude items matching pattern");
+    console.error("  --include <pattern>     Include items matching pattern");
+    console.error(
+      "  --upstream-url <url>    Connect to HTTP/SSE server (mutually exclusive with --)"
+    );
+    console.error(
+      "  --transport <type>      Transport type: stdio, http, sse (auto-detected if omitted)"
+    );
+    console.error(
+      "  --header <header>       Add HTTP header (format: 'Key: Value', HTTP/SSE only)"
+    );
+    console.error("");
     console.error("Examples:");
+    console.error("  # Stdio transport (local servers)");
     console.error(
-      '  mcp-filter --exclude "playwright*" -- npx @playwright/mcp'
+      '  mcp-filter --exclude "test*" -- npx tsx test-server.ts'
     );
+    console.error("");
+    console.error("  # HTTP transport (remote servers)");
     console.error(
-      '  mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp'
+      '  mcp-filter --exclude "dangerous_*" --upstream-url https://mcp.notion.com/mcp'
     );
+    console.error("");
+    console.error("  # SSE transport (deprecated, legacy servers)");
     console.error(
-      '  mcp-filter --include "browser_*" --exclude "browser_close" -- npx @playwright/mcp'
+      '  mcp-filter --transport sse --upstream-url https://mcp.asana.com/sse'
     );
     process.exit(1);
   }
@@ -49,6 +73,8 @@ async function main() {
     );
   }
 
+  console.error(`Transport: ${config.transportConfig.type}`);
+
   // Create filter
   const filter = new Filter(config.patterns);
 
@@ -56,19 +82,14 @@ async function main() {
   const proxy = new ProxyServer(
     {
       name: "mcp-filter",
-      version: "0.2.0",
+      version: "0.5.0",
     },
     filter
   );
 
-  // Connect client to upstream server via subprocess stdio
-  // StdioClientTransport spawns and manages the subprocess
-  const clientTransport = new StdioClientTransport({
-    command: config.upstreamCommand[0],
-    args: config.upstreamCommand.slice(1),
-    env: process.env as Record<string, string>, // Pass current environment
-    stderr: "inherit", // Forward upstream stderr to our stderr
-  });
+  // Connect client to upstream server
+  // Transport factory handles creating the appropriate transport (stdio, http, sse)
+  const clientTransport = createClientTransport(config.transportConfig);
 
   await proxy.getClient().connect(clientTransport);
   console.error("Connected to upstream server");

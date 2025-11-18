@@ -1,5 +1,5 @@
 import { minimatch } from "minimatch";
-import { FilterPattern } from "./cli.js";
+import { FilterPattern } from "./types.js";
 
 export class Filter {
   private hasIncludePatterns: boolean;
