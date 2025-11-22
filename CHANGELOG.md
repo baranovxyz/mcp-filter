@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2025-11-18
+## [0.5.0] - 2025-11-22
 
 ### Added
 - **Multi-Transport Support**: Filter both local and remote MCP servers
@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--upstream-url <url>` flag to connect to remote HTTP/SSE servers
 - `--transport <type>` flag to explicitly specify transport type (stdio/http/sse)
 - `--header <header>` flag to add custom HTTP headers (e.g., authentication)
+- `--help` flag to show usage information
 - Transport factory pattern for clean separation of transport logic
 - HTTP transport integration tests with context7 public endpoint
 - Comprehensive CLI tests for new transport options

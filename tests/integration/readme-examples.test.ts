@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Integration tests validating ALL examples from README.md
  * These tests ensure documentation is accurate and examples work correctly
  */
-describe("README Examples Validation", () => {
+describe.sequential("README Examples Validation", () => {
   const fixtureServer = path.resolve(
     __dirname,
     "../fixtures/browser-server.ts"

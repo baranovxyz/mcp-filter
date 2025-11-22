@@ -34,31 +34,33 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
       ],
     });
 
-    await client.connect(transport);
+    try {
+      await client.connect(transport);
 
-    const result = await client.listTools();
-    expect(result.tools).toBeDefined();
-    expect(Array.isArray(result.tools)).toBe(true);
+      const result = await client.listTools();
+      expect(result.tools).toBeDefined();
+      expect(Array.isArray(result.tools)).toBe(true);
 
-    console.log(`Context7 tools found: ${result.tools.length}`);
-    result.tools.forEach(tool => {
-      console.log(`  - ${tool.name}`);
-    });
+      console.log(`Context7 tools found: ${result.tools.length}`);
+      result.tools.forEach(tool => {
+        console.log(`  - ${tool.name}`);
+      });
 
-    // Verify no tools matching resolve-* pattern are present
-    const resolveTools = result.tools.filter(
-      (tool) => tool.name.match(/^resolve-/)
-    );
-    expect(resolveTools.length).toBe(0);
+      // Verify no tools matching resolve-* pattern are present
+      const resolveTools = result.tools.filter(
+        (tool) => tool.name.match(/^resolve-/)
+      );
+      expect(resolveTools.length).toBe(0);
 
-    // Verify get-library-docs should still be present
-    const getLibraryDocs = result.tools.find(
-      (tool) => tool.name.includes("get-library-docs")
-    );
-    expect(getLibraryDocs).toBeDefined();
-
-    await client.close();
-  }, 15000);
+      // Verify get-library-docs should still be present
+      const getLibraryDocs = result.tools.find(
+        (tool) => tool.name.includes("get-library-docs")
+      );
+      expect(getLibraryDocs).toBeDefined();
+    } finally {
+      await client.close();
+    }
+  }, 60000);
 
   it("should connect to context7 HTTP MCP server and filter tools", async () => {
     const client = new Client(
@@ -78,24 +80,26 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
       ],
     });
 
-    // Connection should succeed
-    await client.connect(transport);
+    try {
+      // Connection should succeed
+      await client.connect(transport);
 
-    // Should be able to list tools
-    const result = await client.listTools();
-    expect(result.tools).toBeDefined();
-    expect(Array.isArray(result.tools)).toBe(true);
+      // Should be able to list tools
+      const result = await client.listTools();
+      expect(result.tools).toBeDefined();
+      expect(Array.isArray(result.tools)).toBe(true);
 
-    console.log(`Connected to context7, found ${result.tools.length} tools`);
+      console.log(`Connected to context7, found ${result.tools.length} tools`);
 
-    // Verify no tools matching our exclusion patterns are present
-    const excludedTools = result.tools.filter(
-      (tool) => tool.name.startsWith("delete_") || tool.name.startsWith("remove_")
-    );
-    expect(excludedTools.length).toBe(0);
-
-    await client.close();
-  }, 15000); // HTTP requests may take longer
+      // Verify no tools matching our exclusion patterns are present
+      const excludedTools = result.tools.filter(
+        (tool) => tool.name.startsWith("delete_") || tool.name.startsWith("remove_")
+      );
+      expect(excludedTools.length).toBe(0);
+    } finally {
+      await client.close();
+    }
+  }, 60000); // HTTP requests may take longer
 
   it("should connect to context7 with include filter", async () => {
     const client = new Client(
@@ -113,22 +117,24 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
       ],
     });
 
-    await client.connect(transport);
+    try {
+      await client.connect(transport);
 
-    const result = await client.listTools();
-    expect(result.tools).toBeDefined();
+      const result = await client.listTools();
+      expect(result.tools).toBeDefined();
 
-    console.log(`Include mode: ${result.tools.length} tools matched 'search_*'`);
+      console.log(`Include mode: ${result.tools.length} tools matched 'search_*'`);
 
-    // All tools should match the include pattern or we should have 0 tools
-    // (if no search tools exist on this server)
-    const nonMatchingTools = result.tools.filter(
-      (tool) => !tool.name.startsWith("search_")
-    );
-    expect(nonMatchingTools.length).toBe(0);
-
-    await client.close();
-  }, 15000);
+      // All tools should match the include pattern or we should have 0 tools
+      // (if no search tools exist on this server)
+      const nonMatchingTools = result.tools.filter(
+        (tool) => !tool.name.startsWith("search_")
+      );
+      expect(nonMatchingTools.length).toBe(0);
+    } finally {
+      await client.close();
+    }
+  }, 60000);
 
   it("should handle HTTP transport with custom headers", async () => {
     const client = new Client(
@@ -147,12 +153,14 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
       ],
     });
 
-    // Should connect successfully even with custom headers
-    await client.connect(transport);
+    try {
+      // Should connect successfully even with custom headers
+      await client.connect(transport);
 
-    const result = await client.listTools();
-    expect(result.tools).toBeDefined();
-
-    await client.close();
-  }, 15000);
+      const result = await client.listTools();
+      expect(result.tools).toBeDefined();
+    } finally {
+      await client.close();
+    }
+  }, 60000);
 });

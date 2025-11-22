@@ -85,6 +85,10 @@ export function parseArgs(args: string[]): FilterConfig {
       continue;
     }
 
+    if (arg === "--help" || arg === "-h") {
+      throw new Error("help");
+    }
+
     throw new Error(`Unknown argument: ${arg}`);
   }
 
