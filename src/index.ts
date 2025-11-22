@@ -14,6 +14,47 @@ async function main() {
   try {
     config = parseArgs(args);
   } catch (error) {
+    if ((error as Error).message === "help") {
+      console.log("Usage:");
+      console.log(
+        "  mcp-filter [options] -- <command> [args...]           # stdio transport"
+      );
+      console.log(
+        "  mcp-filter [options] --upstream-url <url>             # HTTP transport"
+      );
+      console.log("");
+      console.log("Options:");
+      console.log("  --exclude <pattern>     Exclude items matching pattern");
+      console.log("  --include <pattern>     Include items matching pattern");
+      console.log(
+        "  --upstream-url <url>    Connect to HTTP/SSE server (mutually exclusive with --)"
+      );
+      console.log(
+        "  --transport <type>      Transport type: stdio, http, sse (auto-detected if omitted)"
+      );
+      console.log(
+        "  --header <header>       Add HTTP header (format: 'Key: Value', HTTP/SSE only)"
+      );
+      console.log("  --help, -h              Show this help message");
+      console.log("");
+      console.log("Examples:");
+      console.log("  # Stdio transport (local servers)");
+      console.log(
+        '  mcp-filter --exclude "test*" -- npx tsx test-server.ts'
+      );
+      console.log("");
+      console.log("  # HTTP transport (remote servers)");
+      console.log(
+        '  mcp-filter --exclude "dangerous_*" --upstream-url https://mcp.notion.com/mcp'
+      );
+      console.log("");
+      console.log("  # SSE transport (deprecated, legacy servers)");
+      console.log(
+        '  mcp-filter --transport sse --upstream-url https://mcp.asana.com/sse'
+      );
+      process.exit(0);
+    }
+
     console.error(`Error: ${(error as Error).message}`);
     console.error("");
     console.error("Usage:");
