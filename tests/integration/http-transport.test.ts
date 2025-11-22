@@ -58,7 +58,7 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
     expect(getLibraryDocs).toBeDefined();
 
     await client.close();
-  }, 15000);
+  }, 30000);
 
   it("should connect to context7 HTTP MCP server and filter tools", async () => {
     const client = new Client(
@@ -95,7 +95,7 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
     expect(excludedTools.length).toBe(0);
 
     await client.close();
-  }, 15000); // HTTP requests may take longer
+  }, 30000); // HTTP requests may take longer
 
   it("should connect to context7 with include filter", async () => {
     const client = new Client(
@@ -128,7 +128,7 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
     expect(nonMatchingTools.length).toBe(0);
 
     await client.close();
-  }, 15000);
+  }, 30000);
 
   it("should handle HTTP transport with custom headers", async () => {
     const client = new Client(
@@ -154,5 +154,5 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
     expect(result.tools).toBeDefined();
 
     await client.close();
-  }, 15000);
+  }, 30000);
 });
