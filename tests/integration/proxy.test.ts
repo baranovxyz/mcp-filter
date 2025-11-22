@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-describe("Proxy Integration", () => {
+describe.sequential("Proxy Integration", () => {
   let client: Client;
 
   beforeAll(async () => {
