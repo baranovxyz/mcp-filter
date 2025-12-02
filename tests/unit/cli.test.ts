@@ -351,4 +351,56 @@ describe("CLI Parser", () => {
       ).toThrow("--transport http requires --upstream-url");
     });
   });
+
+  describe("parseArgs - malformed argument validation (JSON config mistakes)", () => {
+    it("should detect combined --include with pattern in single string", () => {
+      expect(() => parseArgs(["--include arcanum_*", "--", "cmd"])).toThrow(
+        /Malformed argument.*--include arcanum_\*/
+      );
+    });
+
+    it("should detect combined --exclude with pattern in single string", () => {
+      expect(() => parseArgs(["--exclude test*", "--", "cmd"])).toThrow(
+        /Malformed argument.*--exclude test\*/
+      );
+    });
+
+    it("should detect multiple flags in one string (--include pattern --)", () => {
+      expect(() => parseArgs(["--include arcanum_* --", "cmd"])).toThrow(
+        /Malformed argument/
+      );
+    });
+
+    it("should detect --exclude pattern -- in single string", () => {
+      expect(() => parseArgs(["--exclude blocked_* --", "cmd"])).toThrow(
+        /Malformed argument/
+      );
+    });
+
+    it("should provide helpful error message with WRONG and CORRECT examples", () => {
+      try {
+        parseArgs(["--include browser_*", "--", "cmd"]);
+        expect.fail("Should have thrown");
+      } catch (error) {
+        const message = (error as Error).message;
+        expect(message).toContain("WRONG:");
+        expect(message).toContain("CORRECT:");
+        expect(message).toContain('["--include", "browser_*"');
+        expect(message).toContain("Split the argument into separate array elements");
+      }
+    });
+
+    it("should not reject valid separate arguments", () => {
+      // This should NOT throw - these are correctly separated
+      const result = parseArgs([
+        "--include",
+        "browser_*",
+        "--exclude",
+        "browser_close",
+        "--",
+        "cmd",
+      ]);
+      expect(result.patterns).toHaveLength(2);
+    });
+  });
 });

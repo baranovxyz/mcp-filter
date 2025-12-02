@@ -3,325 +3,11 @@
 [![npm version](https://badge.fury.io/js/mcp-filter.svg)](https://www.npmjs.com/package/mcp-filter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-MCP server proxy to filter tools, resources, and prompts from upstream MCP servers.
+Filter tools, resources, and prompts from MCP servers. Control what AI agents can access.
 
-## Installation
+## Quick Start
 
-```bash
-npm install -g mcp-filter
-# or use with npx
-npx mcp-filter [options] -- <upstream-command>
-```
-
-## Usage
-
-### Local MCP Servers (Stdio Transport)
-
-```bash
-# Exclude mode: filter out specific tools
-npx mcp-filter --exclude "playwright*" -- npx @playwright/mcp
-
-# Include mode: only allow specific tools
-npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp
-
-# Combination: include with exceptions (order matters!)
-npx mcp-filter --exclude "browser_close" --include "browser_*" -- npx @playwright/mcp
-
-# Multiple patterns
-npx mcp-filter --exclude "playwright*" --exclude "unsafe_*" -- npx @playwright/mcp
-
-# Use with any local MCP server
-npx mcp-filter --exclude "debug*" -- node my-mcp-server.js
-```
-
-### Remote MCP Servers (HTTP/SSE Transport)
-
-```bash
-# Filter remote HTTP server (e.g., Notion, Stripe, Linear)
-npx mcp-filter --exclude "delete_*" --upstream-url https://mcp.notion.com/mcp
-
-# Filter with custom headers (authentication, etc.)
-npx mcp-filter --exclude "admin_*" \
-  --upstream-url https://api.example.com/mcp \
-  --header "Authorization: Bearer your-token-here"
-
-# SSE transport (deprecated, for legacy servers)
-npx mcp-filter --transport sse \
-  --upstream-url https://mcp.asana.com/sse \
-  --exclude "dangerous_*"
-
-# Complex filtering with remote servers
-npx mcp-filter \
-  --exclude "delete_*" \
-  --exclude "update_*" \
-  --include "read_*" \
-  --upstream-url https://mcp.example.com/mcp
-```
-
-## Options
-
-### Filtering Options
-- `--exclude <pattern>` - Exclude tools/resources/prompts matching this pattern
-- `--include <pattern>` - Include ONLY tools/resources/prompts matching this pattern (whitelist mode)
-
-### Transport Options
-- `--upstream-url <url>` - Connect to remote HTTP/SSE server (instead of local command)
-- `--transport <type>` - Transport type: `stdio`, `http`, `sse` (auto-detected if omitted)
-- `--header <header>` - Add HTTP header (format: `"Key: Value"`, HTTP/SSE only, can be repeated)
-- `--` - Separates options from local server command (stdio mode only)
-
-**Note**: `--upstream-url` and `--` are mutually exclusive. Use `--upstream-url` for remote servers, or `-- <command>` for local servers.
-
-All options can be specified multiple times and combined together.
-
-**Filtering style:** rsync-style evaluation where patterns are evaluated in the order specified, and first match wins.
-
-## Filtering Modes
-
-### Exclude Mode (--exclude only)
-
-Blocks specific items, allows everything else:
-
-```bash
-# Block browser_close and browser_evaluate tools
-npx mcp-filter --exclude "browser_close" --exclude "browser_evaluate" -- npx @playwright/mcp
-```
-
-### Include Mode (--include only)
-
-Allows ONLY specified items, blocks everything else:
-
-```bash
-# Only allow safe, read-only browser tools
-npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp
-```
-
-### Combination Mode (--include + --exclude)
-
-**Rsync-style filtering**: patterns evaluated in order, first match wins.
-
-⚠️ **Common mistake**: Putting `--include` before `--exclude` means the exclude never applies!
-
-```bash
-# Example 1: Include first, then exclude (DOES NOT WORK AS EXPECTED!)
-npx mcp-filter --include "browser_*" --exclude "browser_close" -- npx @playwright/mcp
-# Result: All browser_* tools are INCLUDED (browser_* matched first)
-# browser_close is also included because it matches browser_* first
-# The --exclude "browser_close" is never evaluated!
-
-# Example 2: Exclude first, then include (CORRECT way to exclude exceptions!)
-npx mcp-filter --exclude "browser_close" --include "browser_*" -- npx @playwright/mcp
-# Result: browser_close is EXCLUDED (matched exclude first)
-# Other browser_* tools are included
-
-# Example 3: Multiple exclusions, then broad include (recommended pattern)
-npx mcp-filter --exclude "browser_close" --exclude "browser_evaluate" --include "browser_*" -- npx @playwright/mcp
-# Result: browser_close and browser_evaluate excluded (matched first)
-# All other browser_* tools included
-```
-
-**Key principle**: Order matters! The first pattern that matches determines if the item is included or excluded.
-
-## Pattern Examples
-
-Patterns use glob syntax (via minimatch):
-
-- `playwright*` - Match all items starting with "playwright"
-- `*_admin` - Match all items ending with "\_admin"
-- `test_*_debug` - Match items with pattern in middle
-- `exact_name` - Match exact name
-- `browser_*` - Match all browser-related tools
-- `*` - Match everything
-
-## Rsync-Style Filtering
-
-mcp-filter uses rsync-style pattern evaluation:
-
-1. **Order matters**: Patterns are evaluated in the order you specify them
-2. **First match wins**: Once a pattern matches, that determines the outcome
-3. **Default behavior**:
-   - If no patterns specified: allow everything (passthrough)
-   - If only `--include`: items not matching any include are excluded (whitelist mode)
-   - If only `--exclude`: items not matching any exclude are included
-   - If mixed: items not matching any pattern use whitelist mode if includes exist
-
-**Example workflow**:
-
-```bash
-# Put more specific patterns first
-npx mcp-filter \
-  --exclude "browser_close" \
-  --exclude "browser_evaluate" \
-  --include "browser_*" \
-  -- npx @playwright/mcp
-
-# This works because:
-# 1. browser_close matches --exclude "browser_close" first → excluded
-# 2. browser_evaluate matches --exclude "browser_evaluate" first → excluded
-# 3. browser_navigate matches --include "browser_*" → included
-# 4. other_tool doesn't match any pattern, but --include exists → excluded (whitelist mode)
-```
-
-## Using with Claude Code
-
-### Adding Filtered MCP Servers
-
-Add filtered MCP servers to Claude Code using the `claude mcp add` command:
-
-```bash
-# Basic syntax
-claude mcp add <name> -- npx mcp-filter [filter-options] -- <upstream-command>
-
-# Example: Safe Playwright with read-only browser access
-claude mcp add playwright-safe -- \
-  npx mcp-filter \
-    --include "browser_navigate" \
-    --include "browser_screenshot" \
-    --include "browser_snapshot" \
-    -- npx @playwright/mcp@latest
-
-# Example: Block dangerous operations
-claude mcp add playwright-filtered -- \
-  npx mcp-filter \
-    --exclude "browser_close" \
-    --exclude "browser_evaluate" \
-    -- npx @playwright/mcp@latest
-
-# Example: Include category with exceptions (rsync-style)
-claude mcp add playwright -- \
-  npx mcp-filter \
-    --exclude "browser_close" \
-    --exclude "browser_evaluate" \
-    --include "browser_*" \
-    -- npx @playwright/mcp@latest
-```
-
-**Understanding the command structure:**
-
-- First `--` separates Claude's options from the mcp-filter command
-- Second `--` separates mcp-filter options from the upstream MCP server command
-
-### Scope Options
-
-Choose where to store the configuration:
-
-```bash
-# Local scope (default): Only you, only this project
-claude mcp add playwright-safe -- npx mcp-filter --include "browser_*" -- npx @playwright/mcp@latest
-
-# User scope: Available across all your projects
-claude mcp add --scope user playwright-safe -- \
-  npx mcp-filter --include "browser_*" -- npx @playwright/mcp@latest
-
-# Project scope: Share with team via .mcp.json (checked into git)
-claude mcp add --scope project playwright-safe -- \
-  npx mcp-filter --include "browser_*" -- npx @playwright/mcp@latest
-```
-
-**Security Note**: Claude Code prompts for approval before using project-scoped servers from `.mcp.json` files. To reset approval choices, use `claude mcp reset-project-choices`.
-
-### Managing Filtered Servers
-
-```bash
-# List all configured servers
-claude mcp list
-
-# Get details for a specific server
-claude mcp get playwright-safe
-
-# Remove a server
-claude mcp remove playwright-safe
-
-# Check server status in Claude Code
-/mcp
-```
-
-### Practical Examples
-
-**Monitoring agent (read-only)**
-
-```bash
-claude mcp add browser-monitor -- \
-  npx mcp-filter \
-    --include "browser_navigate" \
-    --include "browser_snapshot" \
-    --include "browser_console_messages" \
-    --include "browser_network_requests" \
-    --include "browser_take_screenshot" \
-    -- npx @playwright/mcp@latest
-```
-
-**Testing agent (no destructive actions)**
-
-```bash
-claude mcp add browser-test -- \
-  npx mcp-filter \
-    --exclude "browser_close" \
-    --exclude "browser_tabs" \
-    --exclude "browser_evaluate" \
-    --include "browser_*" \
-    -- npx @playwright/mcp@latest
-```
-
-Note: Exclude patterns must come BEFORE the include pattern to match first.
-
-**Production debugging (safe operations only)**
-
-```bash
-# Add as user-scoped for use across projects
-claude mcp add --scope user prod-debugger -- \
-  npx mcp-filter \
-    --exclude "browser_click" \
-    --exclude "browser_type" \
-    --exclude "browser_evaluate" \
-    --exclude "browser_fill_form" \
-    --include "browser_*" \
-    -- npx @playwright/mcp@latest
-```
-
-### Updating Server Configuration
-
-To update filter rules, remove and re-add the server:
-
-```bash
-# Remove existing configuration
-claude mcp remove playwright-safe
-
-# Add with new filter rules
-claude mcp add playwright-safe -- \
-  npx mcp-filter \
-    --include "browser_navigate" \
-    --include "browser_screenshot" \
-    -- npx @playwright/mcp@latest
-```
-
-## Using with Cursor IDE
-
-Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
-
-### Example 1: Exclude specific dangerous tools
-
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": [
-        "mcp-filter",
-        "--exclude",
-        "browser_close",
-        "--exclude",
-        "browser_evaluate",
-        "--",
-        "npx",
-        "@playwright/mcp@latest"
-      ]
-    }
-  }
-}
-```
-
-### Example 2: Include safe tools only
+Add to your MCP client config (Claude Desktop, Cursor, etc.):
 
 ```json
 {
@@ -330,79 +16,172 @@ Add to your `.cursor/mcp.json` or `~/.cursor/mcp.json`:
       "command": "npx",
       "args": [
         "mcp-filter",
-        "--include",
-        "browser_navigate",
-        "--include",
-        "browser_screenshot",
-        "--include",
-        "browser_snapshot",
+        "--exclude", "browser_close",
+        "--exclude", "browser_evaluate",
+        "--include", "browser_*",
         "--",
-        "npx",
-        "@playwright/mcp@latest"
+        "npx", "@playwright/mcp@latest"
       ]
     }
   }
 }
 ```
 
-### Example 3: Include category with exceptions (rsync-style)
+This allows all `browser_*` tools **except** `browser_close` and `browser_evaluate`.
+
+## Why?
+
+- **Security** - Block dangerous tools (eval, delete, admin operations)
+- **Control** - Whitelist only the tools your agent needs
+- **Works everywhere** - Proxy any MCP server (local or remote)
+
+## Installation
+
+```bash
+npx mcp-filter [options] -- <server-command>
+# or install globally
+npm install -g mcp-filter
+```
+
+## How Patterns Work
+
+Use `--include` and `--exclude` with glob patterns:
+
+```bash
+--include "browser_*"     # Allow all browser_* tools
+--exclude "browser_close" # Block browser_close
+--exclude "delete_*"      # Block all delete_* tools
+```
+
+**Order matters!** Patterns are evaluated in order, first match wins:
+
+```bash
+# CORRECT: exclude first, then include
+--exclude "browser_close" --include "browser_*"
+# Result: browser_close blocked, other browser_* allowed
+
+# WRONG: include first (exclude never matches!)
+--include "browser_*" --exclude "browser_close"
+# Result: ALL browser_* allowed (browser_* matches first)
+```
+
+## Configuration
+
+### JSON Config (Claude Desktop, Cursor, VS Code)
+
+Each argument must be a **separate string** in the array:
 
 ```json
 {
   "mcpServers": {
-    "playwright-filtered": {
+    "my-server": {
       "command": "npx",
       "args": [
         "mcp-filter",
-        "--exclude",
-        "browser_close",
-        "--exclude",
-        "browser_evaluate",
-        "--include",
-        "browser_*",
+        "--exclude", "dangerous_*",
+        "--include", "safe_*",
         "--",
-        "npx",
-        "@playwright/mcp@latest"
+        "npx", "your-mcp-server"
       ]
     }
   }
 }
 ```
 
-Note: Exclude patterns come first to match before the broader include pattern.
+**Config file locations:**
+- Claude Desktop: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+- Cursor: `.cursor/mcp.json` or `~/.cursor/mcp.json`
 
-After adding the configuration, restart Cursor completely to apply the changes.
+### CLI Usage
+
+```bash
+# Local server (stdio)
+npx mcp-filter --exclude "admin_*" -- npx @playwright/mcp
+
+# Remote server (HTTP)
+npx mcp-filter --exclude "delete_*" --upstream-url https://mcp.example.com/mcp
+
+# With authentication header
+npx mcp-filter --exclude "admin_*" \
+  --upstream-url https://api.example.com/mcp \
+  --header "Authorization: Bearer token"
+```
+
+## Common Mistakes
+
+### JSON args must be separate strings
+
+**WRONG:**
+```json
+"args": ["mcp-filter", "--include browser_* --", "npx", "server"]
+```
+
+**CORRECT:**
+```json
+"args": ["mcp-filter", "--include", "browser_*", "--", "npx", "server"]
+```
+
+The shell splits arguments for you. JSON doesn't - you must split them manually.
+
+mcp-filter detects this and shows a helpful error:
+
+```
+Malformed argument: "--include browser_* --"
+
+WRONG:
+  "args": ["--include browser_* --", ...]
+
+CORRECT:
+  "args": ["--include", "browser_*", "--", ...]
+```
+
+### Pattern order matters
+
+Put `--exclude` patterns **before** `--include` to create exceptions:
+
+```bash
+# Block browser_close, allow other browser_* tools
+--exclude "browser_close" --include "browser_*"
+```
+
+## Options Reference
+
+| Option | Description |
+|--------|-------------|
+| `--include <pattern>` | Include items matching pattern (whitelist) |
+| `--exclude <pattern>` | Exclude items matching pattern (blocklist) |
+| `--upstream-url <url>` | Connect to remote HTTP/SSE server |
+| `--transport <type>` | Transport: `stdio`, `http`, `sse` (auto-detected) |
+| `--header <header>` | HTTP header (format: `"Key: Value"`) |
+| `--help` | Show help |
+
+Options can be repeated. Patterns use glob syntax via [minimatch](https://github.com/isaacs/minimatch).
 
 ## How It Works
 
-mcp-filter acts as a proxy between an MCP client and an upstream MCP server:
+```
+MCP Client → mcp-filter → Upstream MCP Server
+                ↓
+         Filters tools/list
+         Blocks excluded calls
+```
 
-1. Spawns the upstream MCP server as a subprocess
-2. Connects to it as an MCP client
-3. Exposes a filtered MCP server interface
-4. Filters `tools/list`, `resources/list`, and `prompts/list` responses
-5. Blocks calls to filtered items with error responses
+1. Proxies requests between your MCP client and upstream server
+2. Filters `tools/list`, `resources/list`, `prompts/list` responses
+3. Blocks calls to filtered items with error responses
 
 ## Development
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Build
 pnpm run build
-
-# Run tests
 pnpm test
-
-# Test locally
-./dist/index.js --exclude "playwright*" -- npx tsx test-server.ts
 ```
 
 ## Links
 
 - [npm package](https://www.npmjs.com/package/mcp-filter)
-- [GitHub repository](https://github.com/baranovxyz/mcp-filter)
+- [GitHub](https://github.com/baranovxyz/mcp-filter)
 
 ## License
 

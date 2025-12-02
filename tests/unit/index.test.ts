@@ -144,6 +144,6 @@ describe("Index Module Integration", () => {
   it("should have error handling", () => {
     expect(indexSource).toContain("try {");
     expect(indexSource).toContain("catch");
-    expect(indexSource).toContain("console.error");
+    expect(indexSource).toContain("logger.error");
   });
 });

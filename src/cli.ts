@@ -5,7 +5,47 @@ import {
   TransportType,
 } from "./types.js";
 
+/**
+ * Validates arguments for common JSON configuration mistakes.
+ * In JSON configs, each argument must be a separate array element.
+ * This catches cases like ["--include pattern"] instead of ["--include", "pattern"].
+ */
+function validateArgs(args: string[]): void {
+  for (const arg of args) {
+    // Detect combined flag+value: "--include pattern" or "--exclude pattern"
+    if (/^--(include|exclude)\s+/.test(arg)) {
+      const parts = arg.split(/\s+/);
+      const flag = parts[0];
+      const pattern = parts.slice(1).join(" ");
+      throw new Error(
+        `Malformed argument: "${arg}"\n\n` +
+          `In JSON config, each argument must be a separate string.\n\n` +
+          `WRONG:\n` +
+          `  "args": ["${arg}", ...]\n\n` +
+          `CORRECT:\n` +
+          `  "args": ["${flag}", "${pattern}", ...]\n\n` +
+          `Split the argument into separate array elements.`
+      );
+    }
+
+    // Detect multiple flags in one string: "--include pattern --" or "--exclude foo --include bar"
+    if (arg.startsWith("--") && / --/.test(arg)) {
+      throw new Error(
+        `Malformed argument: "${arg}"\n\n` +
+          `Multiple flags found in single argument. In JSON config, each must be separate.\n\n` +
+          `WRONG:\n` +
+          `  "args": ["${arg}", ...]\n\n` +
+          `CORRECT:\n` +
+          `  "args": ["--include", "pattern", "--", ...]\n\n` +
+          `Split into separate array elements.`
+      );
+    }
+  }
+}
+
 export function parseArgs(args: string[]): FilterConfig {
+  // Validate for common JSON config mistakes before parsing
+  validateArgs(args);
   const patterns: FilterPattern[] = [];
   const upstreamCommand: string[] = [];
   let upstreamUrl: string | undefined;
