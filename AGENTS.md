@@ -145,6 +145,7 @@ src/
 ├── cli.ts        # Argument parser (pure function, well-tested)
 ├── transport.ts  # Transport factory: creates stdio/HTTP/SSE transports
 ├── filter.ts     # Pattern matching logic (pure class, well-tested)
+├── logger.ts     # Consola logger configured for stderr output
 └── proxy.ts      # ProxyServer class: dual MCP client/server
 
 tests/
@@ -219,9 +220,13 @@ The package is published to npm at https://www.npmjs.com/package/mcp-filter
 ### Publishing Checklist
 
 1. Ensure all tests pass: `pnpm test`
-2. Update version in package.json if needed
-3. Build: `pnpm run build`
-4. Publish: `pnpm publish`
+2. Update version in `package.json` and `src/index.ts`
+3. Update `CHANGELOG.md` with release notes
+4. Build: `pnpm run build`
+5. Create release branch: `git checkout -b release/X.Y.Z`
+6. Commit, push branch, create PR
+7. Publish: `pnpm publish` (done manually by maintainer)
+8. Merge PR to main
 
 ### Package Configuration
 
@@ -229,3 +234,10 @@ The package is published to npm at https://www.npmjs.com/package/mcp-filter
 - **Files included**: Only `dist/`, `README.md`, and `LICENSE` are published (configured via `files` field)
 - **Excluded from package**: Tests, configs, source files (via `.npmignore`)
 - **Version locking**: `.npmrc` has `save-exact=true` for reproducible builds
+
+## User Preferences
+
+- **CLI output**: Use `consola` logger (not `console.log`) - outputs to stderr to avoid interfering with MCP JSON-RPC
+- **Error messages**: Make them LLM-friendly with clear WRONG/CORRECT examples for actionable fixes
+- **README style**: Keep concise, avoid redundancy - prefer tables and quick reference sections
+- **Commits/PRs**: Do not mention AI tools in commit messages or PR descriptions
