@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-12-02
+
+### Added
+- **Consola Logging**: Modern CLI output with colors, icons, and semantic log levels
+  - `info` for startup information
+  - `success` for connection and ready states
+  - `error` for errors with actionable messages
+  - `fatal` for unrecoverable errors
+- **Argument Validation**: Detects common JSON configuration mistakes
+  - Catches combined flag+pattern in single string (e.g., `"--include pattern"`)
+  - Catches multiple flags in single string (e.g., `"--include pattern --"`)
+  - LLM-friendly error messages with WRONG/CORRECT examples
+
+### Changed
+- **README restructured** for better onboarding (490 → 189 lines)
+- Replaced all `console.*` calls with `consola` logger
+
 ## [0.5.0] - 2025-11-22
 
 ### Added
