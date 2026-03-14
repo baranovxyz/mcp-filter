@@ -7,6 +7,9 @@ import {
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  ToolListChangedNotificationSchema,
+  ResourceListChangedNotificationSchema,
+  PromptListChangedNotificationSchema,
   type Tool,
   type Resource,
   type Prompt,
@@ -132,6 +135,28 @@ export class ProxyServer {
 
       return await this.client.getPrompt(request.params);
     });
+
+    // Forward list-changed notifications from upstream to downstream
+    this.client.setNotificationHandler(
+      ToolListChangedNotificationSchema,
+      async () => {
+        await this.server.sendToolListChanged();
+      }
+    );
+
+    this.client.setNotificationHandler(
+      ResourceListChangedNotificationSchema,
+      async () => {
+        await this.server.sendResourceListChanged();
+      }
+    );
+
+    this.client.setNotificationHandler(
+      PromptListChangedNotificationSchema,
+      async () => {
+        await this.server.sendPromptListChanged();
+      }
+    );
   }
 
   getClient(): Client {
