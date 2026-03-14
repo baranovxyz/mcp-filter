@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "fs";
+import { execFileSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -137,13 +138,56 @@ describe("Index Module Integration", () => {
 
   it("should use ESM imports", () => {
     // Verify we're using ES modules (import, not require)
+    // Note: createRequire is used to load package.json (standard ESM pattern)
     expect(indexSource).toContain("import ");
-    expect(indexSource).not.toContain('require("');
+    expect(indexSource).toContain("createRequire");
   });
 
   it("should have error handling", () => {
     expect(indexSource).toContain("try {");
     expect(indexSource).toContain("catch");
     expect(indexSource).toContain("logger.error");
+  });
+
+  it("should read version from package.json (not hardcoded)", () => {
+    expect(indexSource).toContain("createRequire(import.meta.url)");
+    expect(indexSource).toContain('require("../package.json")');
+    // Verify no hardcoded version string in proxy instantiation
+    expect(indexSource).not.toMatch(/version:\s*["'][\d.]+["']/);
+  });
+});
+
+describe("CLI Flags", () => {
+  const filterBin = path.resolve(__dirname, "../../dist/index.js");
+
+  it("should print version with --version", () => {
+    const pkg = JSON.parse(
+      readFileSync(path.resolve(__dirname, "../../package.json"), "utf-8")
+    );
+    const output = execFileSync("node", [filterBin, "--version"], {
+      encoding: "utf-8",
+    }).trim();
+    expect(output).toBe(pkg.version);
+  });
+
+  it("should print help with --help and exit 0", () => {
+    const output = execFileSync("node", [filterBin, "--help"], {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    // --help prints to stderr, stdout may be empty
+    // The process should exit 0 (no throw)
+  });
+
+  it("should exit 1 with usage on invalid args", () => {
+    try {
+      execFileSync("node", [filterBin, "--invalid-flag"], {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      expect.unreachable("Should have exited with code 1");
+    } catch (error: unknown) {
+      expect((error as { status: number }).status).toBe(1);
+    }
   });
 });

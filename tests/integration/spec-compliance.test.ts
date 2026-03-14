@@ -371,6 +371,21 @@ describe.sequential("MCP Spec Compliance", () => {
   // 9. FILTER EDGE CASES
   // ===================================================================
   describe("Filter Edge Cases", () => {
+    it("should return empty lists when all items are filtered out", async () => {
+      // Use an include pattern that matches nothing
+      await createClient(["--include", "nonexistent_*"]);
+
+      const tools = await client.listTools();
+      const resources = await client.listResources();
+      const prompts = await client.listPrompts();
+      const templates = await client.listResourceTemplates();
+
+      expect(tools.tools).toEqual([]);
+      expect(resources.resources).toEqual([]);
+      expect(prompts.prompts).toEqual([]);
+      expect(templates.resourceTemplates).toEqual([]);
+    });
+
     it("should pass through everything with no filters", async () => {
       await createClient([]);
 
