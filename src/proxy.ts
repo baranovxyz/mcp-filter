@@ -74,10 +74,12 @@ export class ProxyServer {
     await this.client.connect(clientTransport);
 
     const upstreamCaps = this.client.getServerCapabilities() ?? {};
+    const upstreamInstructions = this.client.getInstructions();
 
-    // Create the Server with capabilities mirrored from upstream
+    // Create the Server with capabilities and instructions mirrored from upstream
     this.server = new Server(this.serverInfo, {
       capabilities: this.buildCapabilities(upstreamCaps),
+      ...(upstreamInstructions && { instructions: upstreamInstructions }),
     });
 
     this.setupHandlers(upstreamCaps);
@@ -171,10 +173,10 @@ export class ProxyServer {
           const progressToken = extra._meta?.progressToken;
           if (progressToken !== undefined) {
             options.onprogress = (progress) => {
-              void extra.sendNotification({
+              extra.sendNotification({
                 method: "notifications/progress" as const,
                 params: { ...progress, progressToken },
-              });
+              }).catch(() => {});
             };
           }
 
@@ -242,10 +244,10 @@ export class ProxyServer {
           const progressToken = extra._meta?.progressToken;
           if (progressToken !== undefined) {
             options.onprogress = (progress) => {
-              void extra.sendNotification({
+              extra.sendNotification({
                 method: "notifications/progress" as const,
                 params: { ...progress, progressToken },
-              });
+              }).catch(() => {});
             };
           }
           return await this.client.readResource(request.params, options);
@@ -314,10 +316,10 @@ export class ProxyServer {
           const progressToken = extra._meta?.progressToken;
           if (progressToken !== undefined) {
             options.onprogress = (progress) => {
-              void extra.sendNotification({
+              extra.sendNotification({
                 method: "notifications/progress" as const,
                 params: { ...progress, progressToken },
-              });
+              }).catch(() => {});
             };
           }
 

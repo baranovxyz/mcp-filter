@@ -109,24 +109,7 @@ async function main() {
   // downstream server with mirrored capabilities and forwarding handlers.
   const clientTransport = createClientTransport(config.transportConfig);
 
-  const CONNECTION_TIMEOUT_MS = 30_000;
-  await Promise.race([
-    proxy.connectToUpstream(clientTransport),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Timed out connecting to upstream server")),
-        CONNECTION_TIMEOUT_MS
-      )
-    ),
-  ]);
-  logger.success("Connected to upstream server");
-
-  // Connect server to current process stdio (for the MCP client calling us)
-  const serverTransport = new StdioServerTransport();
-  await proxy.getServer().connect(serverTransport);
-  logger.success("MCP filter proxy ready");
-
-  // Handle cleanup
+  // Handle cleanup (defined early so onerror/onclose can reference it)
   let isShuttingDown = false;
   const cleanup = async () => {
     if (isShuttingDown) return;
@@ -139,6 +122,34 @@ async function main() {
       // Best-effort cleanup — don't block exit on errors
     }
     process.exit(0);
+  };
+
+  const CONNECTION_TIMEOUT_MS = 30_000;
+  let connectionTimeoutId: ReturnType<typeof setTimeout>;
+  await Promise.race([
+    proxy.connectToUpstream(clientTransport),
+    new Promise<never>((_, reject) => {
+      connectionTimeoutId = setTimeout(
+        () => reject(new Error("Timed out connecting to upstream server")),
+        CONNECTION_TIMEOUT_MS
+      );
+    }),
+  ]);
+  clearTimeout(connectionTimeoutId!);
+  logger.success("Connected to upstream server");
+
+  // Connect server to current process stdio (for the MCP client calling us)
+  const serverTransport = new StdioServerTransport();
+  await proxy.getServer().connect(serverTransport);
+  logger.success("MCP filter proxy ready");
+
+  // Propagate upstream transport errors/close to downstream
+  proxy.getClient().onerror = (error) => {
+    logger.error("Upstream transport error:", error.message);
+  };
+  proxy.getClient().onclose = () => {
+    logger.info("Upstream connection closed, shutting down...");
+    cleanup();
   };
 
   process.on("SIGINT", cleanup);
