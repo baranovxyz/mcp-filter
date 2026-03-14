@@ -7,6 +7,9 @@ import {
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  type Tool,
+  type Resource,
+  type Prompt,
 } from "@modelcontextprotocol/sdk/types.js";
 import { Filter } from "./filter.js";
 
@@ -38,13 +41,37 @@ export class ProxyServer {
     this.setupHandlers();
   }
 
+  /**
+   * Fetches all pages of a paginated MCP list operation.
+   * Prevents filter bypass where blocked items on page 2+ would leak through.
+   */
+  private async fetchAllPages<T>(
+    fetchPage: (cursor?: string) => Promise<{ items: T[]; nextCursor?: string }>
+  ): Promise<T[]> {
+    const allItems: T[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const response = await fetchPage(cursor);
+      allItems.push(...response.items);
+      cursor = response.nextCursor;
+    } while (cursor);
+
+    return allItems;
+  }
+
   private setupHandlers() {
     // Tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      const response = await this.client.listTools();
+      const tools = await this.fetchAllPages<Tool>(async (cursor) => {
+        const response = await this.client.listTools(
+          cursor ? { cursor } : undefined
+        );
+        return { items: response.tools, nextCursor: response.nextCursor };
+      });
 
       return {
-        tools: this.filter.filterList(response.tools),
+        tools: this.filter.filterList(tools),
       };
     });
 
@@ -58,28 +85,41 @@ export class ProxyServer {
 
     // Resources
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      const response = await this.client.listResources();
+      const resources = await this.fetchAllPages<Resource>(async (cursor) => {
+        const response = await this.client.listResources(
+          cursor ? { cursor } : undefined
+        );
+        return {
+          items: response.resources,
+          nextCursor: response.nextCursor,
+        };
+      });
 
       return {
-        resources: this.filter.filterList(response.resources),
+        resources: this.filter.filterList(resources),
       };
     });
 
     this.server.setRequestHandler(
       ReadResourceRequestSchema,
       async (request) => {
-        // Resources are identified by URI, not name, so we can't easily filter calls
-        // We'll allow reads but they won't be in the list if filtered
+        // Resources are identified by URI, not name, so we can't easily filter calls.
+        // Reads are forwarded but the resource won't appear in listResources if filtered.
         return await this.client.readResource(request.params);
       }
     );
 
     // Prompts
     this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
-      const response = await this.client.listPrompts();
+      const prompts = await this.fetchAllPages<Prompt>(async (cursor) => {
+        const response = await this.client.listPrompts(
+          cursor ? { cursor } : undefined
+        );
+        return { items: response.prompts, nextCursor: response.nextCursor };
+      });
 
       return {
-        prompts: this.filter.filterList(response.prompts),
+        prompts: this.filter.filterList(prompts),
       };
     });
 
