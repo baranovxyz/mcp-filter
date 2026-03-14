@@ -86,10 +86,12 @@ pnpm run build
 4. **Proxy Server** (`src/proxy.ts`)
    - **Dual role**: Acts as both MCP client (to upstream) and MCP server (to caller)
    - **Two-phase initialization**: Connects to upstream first via `connectToUpstream()`, reads upstream capabilities, then creates the downstream server with mirrored capabilities
-   - **Capability mirroring**: Downstream server advertises the same capabilities as upstream (tools, resources, prompts, logging, completions, resources.subscribe, listChanged flags)
+   - **Capability gating**: Only advertises capabilities upstream actually supports — does NOT add tools/resources/prompts if upstream lacks them. Handlers are conditionally registered to match.
    - **Client side**: Connects to upstream via transport factory (stdio/HTTP/SSE)
    - **Server side**: Exposes filtered interface via `StdioServerTransport`
-   - **Pagination-aware**: Drains all pages via cursor before filtering (prevents filter bypass)
+   - **Pagination-aware**: Drains all pages via cursor before filtering (capped at 100 pages to prevent infinite loops)
+   - **Progress forwarding**: Extracts `progressToken` from request `_meta`, relays upstream progress notifications to downstream via `onprogress` callback
+   - **Cancellation propagation**: Forwards `extra.signal` to all upstream client calls; downstream abort triggers upstream `notifications/cancelled`
    - **Notification forwarding**: Relays all upstream→downstream notifications (`list_changed`, `resources/updated`, `notifications/message`)
    - **Reverse-direction forwarding**: Forwards `sampling/createMessage`, `roots/list`, `elicitation/create` from upstream server to downstream client
    - **Request handlers**: Intercepts list requests, applies filters, forwards call requests
@@ -143,8 +145,8 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
 
 - **Filtering strategy** (transport-agnostic):
   - `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` → drain all pages, then filter before returning
-  - `tools/call`, `prompts/get` → block if name matches excluded pattern
-  - `completion/complete` → block if `ref/prompt` references a filtered prompt; forward `ref/resource` completions (same rationale as `resources/read`)
+  - `tools/call`, `prompts/get` → block with `McpError(ErrorCode.InvalidParams)` (returns `-32602`) if name matches excluded pattern
+  - `completion/complete` → block with `McpError(ErrorCode.InvalidParams)` if `ref/prompt` references a filtered prompt; forward `ref/resource` completions (same rationale as `resources/read`)
   - `resources/read` → forwarded (cannot filter by URI easily; resource won't appear in list if filtered)
   - `resources/subscribe`, `resources/unsubscribe` → forwarded to upstream
   - `logging/setLevel` → forwarded to upstream
@@ -175,13 +177,15 @@ tests/
 │   ├── http-transport.test.ts    # HTTP transport tests (external, requires network)
 │   ├── pagination.test.ts        # Pagination drain-all-pages tests
 │   ├── resources-prompts.test.ts # Resource & prompt filtering tests
-│   ├── spec-compliance.test.ts  # MCP spec compliance (capabilities, logging, completions, subscriptions)
+│   ├── spec-compliance.test.ts    # MCP spec compliance (capabilities, logging, completions, subscriptions, error codes)
+│   ├── progress-cancellation.test.ts # Progress forwarding & cancellation propagation tests
 │   └── readme-examples.test.ts   # Validate README examples
 └── fixtures/     # Test helper servers
     ├── simple-server.ts          # Basic tools (allowed/blocked)
     ├── browser-server.ts         # Browser-like tools for README examples
     ├── full-server.ts            # Tools + resources + prompts
-    ├── spec-server.ts            # Full MCP spec features (logging, completions, subscriptions)
+    ├── spec-server.ts            # Full MCP spec features (logging, completions, subscriptions, progress)
+    ├── minimal-server.ts         # Tools-only server (no resources/prompts) for capability gating tests
     ├── paginated-server.ts       # Paginated tool list (2 pages)
     ├── http-server.ts            # StreamableHTTP server (Express)
     └── sse-server.ts             # SSE server (Express, deprecated transport)
@@ -198,11 +202,12 @@ tests/
   - Use `describe.sequential()` when spawning multiple MCP servers to avoid EPIPE race conditions
   - **Local fixtures for all transports**: HTTP and SSE tests use local Express-based fixture servers (no external network dependency)
   - **All MCP primitives tested**: Tools, resources, resource templates, and prompts
-  - **Spec compliance tested**: Capability mirroring, logging, completions, resource subscriptions, notification forwarding
+  - **Spec compliance tested**: Capability gating, error codes (`-32602`), logging, completions, resource subscriptions, notification forwarding
+  - **Progress/cancellation tested**: End-to-end progress notification forwarding, downstream abort propagation
   - **Pagination tested**: Fixture server returns 2 pages, verifies filter applies across all pages
   - Test with real-world MCP servers (e.g., chrome-devtools-mcp) to verify compatibility
   - Each test should properly close clients to avoid resource leaks
-- **Fixtures**: Express-based servers for HTTP/SSE, stdio servers for tools/resources/prompts/pagination/spec-compliance
+- **Fixtures**: Express-based servers for HTTP/SSE, stdio servers for tools/resources/prompts/pagination/spec-compliance/progress/minimal-capability
 
 ## MCP SDK Usage Patterns
 
@@ -210,9 +215,11 @@ When working with MCP SDK:
 
 - **Client methods**: Use high-level methods like `client.listTools()`, `client.callTool(params)`, `client.complete(params)`, `client.setLoggingLevel(level)`, `client.subscribeResource(params)`
 - **Server methods**: `server.createMessage(params)`, `server.elicitInput(params)`, `server.listRoots(params)`, `server.sendLoggingMessage(params)`, `server.sendResourceUpdated(params)`
-- **Server handlers**: Use `server.setRequestHandler(Schema, handler)` for each request type
-- **Schemas**: Import from `@modelcontextprotocol/sdk/types.js` (e.g., `ListToolsRequestSchema`, `CompleteRequestSchema`, `SetLevelRequestSchema`)
-- **Capability checks**: SDK enforces capabilities — `Server.registerCapabilities()` must be called before `connect()`. `setRequestHandler()` checks `assertRequestHandlerCapability()`. Client methods check `assertCapabilityForMethod()`
+- **Server handlers**: Use `server.setRequestHandler(Schema, (request, extra) => ...)` — `extra` provides `signal`, `_meta`, `sendNotification`
+- **Error handling**: Use `throw new McpError(ErrorCode.InvalidParams, message)` for rejected calls — never plain `Error` (SDK wraps as `-32603` InternalError)
+- **Request options**: Pass `{ signal: extra.signal, onprogress }` as `RequestOptions` to client methods for cancellation/progress
+- **Schemas**: Import from `@modelcontextprotocol/sdk/types.js` (e.g., `ListToolsRequestSchema`, `McpError`, `ErrorCode`)
+- **Capability checks**: SDK enforces capabilities — `setRequestHandler()` checks `assertRequestHandlerCapability()`. Only register handlers for capabilities the server declares
 - **Two-phase init pattern**: Connect client to upstream first to read capabilities, then create server with mirrored capabilities, then connect server to downstream
 - **Transports**:
   - `StdioClientTransport` for connecting to upstream
