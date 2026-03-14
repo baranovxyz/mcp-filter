@@ -79,7 +79,16 @@ Examples:
   // Transport factory handles creating the appropriate transport (stdio, http, sse)
   const clientTransport = createClientTransport(config.transportConfig);
 
-  await proxy.getClient().connect(clientTransport);
+  const CONNECTION_TIMEOUT_MS = 30_000;
+  await Promise.race([
+    proxy.getClient().connect(clientTransport),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Timed out connecting to upstream server")),
+        CONNECTION_TIMEOUT_MS
+      )
+    ),
+  ]);
   logger.success("Connected to upstream server");
 
   // Connect server to current process stdio (for the MCP client calling us)
