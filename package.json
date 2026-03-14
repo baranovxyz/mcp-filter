@@ -1,10 +1,16 @@
 {
   "name": "mcp-filter",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "MCP server proxy to filter tools, resources, and prompts from upstream MCP servers",
   "type": "module",
   "bin": {
     "mcp-filter": "./dist/index.js"
+  },
+  "exports": {
+    "./filter": "./dist/filter.js",
+    "./proxy": "./dist/proxy.js",
+    "./transport": "./dist/transport.js",
+    "./types": "./dist/types.js"
   },
   "files": [
     "dist",

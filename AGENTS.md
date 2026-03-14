@@ -65,6 +65,7 @@ pnpm run build
 
    - Parses `--exclude <pattern>` and `--include <pattern>` arguments (rsync-style)
    - Parses transport options: `--upstream-url`, `--transport`, `--header`
+   - Supports `--help` and `--version` flags
    - Returns `FilterConfig` with patterns and `transportConfig`
    - Supports both stdio (local servers) and HTTP/SSE (remote servers)
 
@@ -89,11 +90,11 @@ pnpm run build
    - **Capability gating**: Only advertises capabilities upstream actually supports — does NOT add tools/resources/prompts if upstream lacks them. Handlers are conditionally registered to match.
    - **Client side**: Connects to upstream via transport factory (stdio/HTTP/SSE)
    - **Server side**: Exposes filtered interface via `StdioServerTransport`
-   - **Pagination-aware**: Drains all pages via cursor before filtering (capped at 100 pages to prevent infinite loops)
-   - **Progress forwarding**: Extracts `progressToken` from request `_meta`, relays upstream progress notifications to downstream via `onprogress` callback
-   - **Cancellation propagation**: Forwards `extra.signal` to all upstream client calls; downstream abort triggers upstream `notifications/cancelled`
+   - **Pagination-aware**: Drains all pages via cursor before filtering (capped at 100 pages to prevent infinite loops). Accepts AbortSignal for cancellation mid-pagination.
+   - **Progress forwarding**: Extracts `progressToken` from request `_meta`, relays upstream progress notifications to downstream via `onprogress` callback. Supported on `tools/call`, `prompts/get`, and `resources/read`.
+   - **Cancellation propagation**: Forwards `extra.signal` to all upstream client calls including list operations and reverse-direction handlers; downstream abort triggers upstream `notifications/cancelled`
    - **Notification forwarding**: Relays all upstream→downstream notifications (`list_changed`, `resources/updated`, `notifications/message`)
-   - **Reverse-direction forwarding**: Forwards `sampling/createMessage`, `roots/list`, `elicitation/create` from upstream server to downstream client
+   - **Reverse-direction forwarding**: Forwards `sampling/createMessage`, `roots/list`, `elicitation/create` from upstream server to downstream client (with cancellation support)
    - **Request handlers**: Intercepts list requests, applies filters, forwards call requests
    - Fully transport-agnostic: works with any client transport type
 
@@ -112,6 +113,8 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
 ```
 
 ### Key Implementation Details
+
+- **Version**: Read from package.json at runtime via `createRequire` (not hardcoded)
 
 - **Multi-Transport Support**: Supports stdio, HTTP, and SSE transports
   - **Upstream**: Transport factory (`src/transport.ts`) creates appropriate client transport
@@ -144,14 +147,14 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
   - **Shutdown guard**: Double-signal protection prevents concurrent cleanup
 
 - **Filtering strategy** (transport-agnostic):
-  - `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` → drain all pages, then filter before returning
+  - `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` → drain all pages (with signal forwarding), then filter before returning
   - `tools/call`, `prompts/get` → block with `McpError(ErrorCode.InvalidParams)` (returns `-32602`) if name matches excluded pattern
   - `completion/complete` → block with `McpError(ErrorCode.InvalidParams)` if `ref/prompt` references a filtered prompt; forward `ref/resource` completions (same rationale as `resources/read`)
-  - `resources/read` → forwarded (cannot filter by URI easily; resource won't appear in list if filtered)
+  - `resources/read` → forwarded with progress support (cannot filter by URI easily; resource won't appear in list if filtered)
   - `resources/subscribe`, `resources/unsubscribe` → forwarded to upstream
   - `logging/setLevel` → forwarded to upstream
   - Notifications (`*/list_changed`, `resources/updated`, `notifications/message`) → forwarded from upstream to downstream
-  - Reverse-direction requests (`sampling/createMessage`, `roots/list`, `elicitation/create`) → forwarded from upstream server to downstream client
+  - Reverse-direction requests (`sampling/createMessage`, `roots/list`, `elicitation/create`) → forwarded from upstream server to downstream client (with signal forwarding)
   - `notifications/roots/list_changed` → forwarded from downstream client to upstream server
   - Rsync-style: patterns evaluated in order, first match wins
 
@@ -159,7 +162,7 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
 
 ```
 src/
-├── index.ts      # Entry point: CLI parsing, transport creation, proxy wiring
+├── index.ts      # Entry point: --help/--version, CLI parsing, transport creation, proxy wiring
 ├── types.ts      # Type definitions (FilterConfig, TransportConfig, etc.)
 ├── cli.ts        # Argument parser (pure function, well-tested)
 ├── transport.ts  # Transport factory: creates stdio/HTTP/SSE transports
@@ -168,7 +171,7 @@ src/
 └── proxy.ts      # ProxyServer class: dual MCP client/server
 
 tests/
-├── unit/         # Fast isolated tests (cli, filter, transport, index architecture)
+├── unit/         # Fast isolated tests (cli, filter, transport, index architecture, CLI flags)
 ├── integration/  # Full MCP communication tests
 │   ├── proxy.test.ts             # Core filtering integration tests (stdio)
 │   ├── subprocess.test.ts        # Stdio transport & subprocess management
@@ -177,7 +180,7 @@ tests/
 │   ├── http-transport.test.ts    # HTTP transport tests (external, requires network)
 │   ├── pagination.test.ts        # Pagination drain-all-pages tests
 │   ├── resources-prompts.test.ts # Resource & prompt filtering tests
-│   ├── spec-compliance.test.ts    # MCP spec compliance (capabilities, logging, completions, subscriptions, error codes)
+│   ├── spec-compliance.test.ts   # MCP spec compliance (capabilities, logging, completions, subscriptions, error codes, empty lists)
 │   ├── progress-cancellation.test.ts # Progress forwarding & cancellation propagation tests
 │   └── readme-examples.test.ts   # Validate README examples
 └── fixtures/     # Test helper servers
@@ -194,19 +197,22 @@ tests/
 ## Testing Approach
 
 - **Framework**: Vitest (ESM-native, TypeScript, fast)
+- **CI**: GitHub Actions runs tests on Node 18, 20, 22
 - **Unit tests**: Test pure functions/classes in isolation
   - Can verify architecture patterns by reading source files (see `tests/unit/index.test.ts`)
-  - Validate no anti-patterns exist (e.g., manual subprocess spawning)
+  - Validate no anti-patterns exist (e.g., manual subprocess spawning, hardcoded versions)
   - Transport factory tested with all transport types and error paths
+  - CLI flag tests (`--help`, `--version`, invalid args)
 - **Integration tests**: Spawn actual MCP servers and test end-to-end communication
   - Use `describe.sequential()` when spawning multiple MCP servers to avoid EPIPE race conditions
   - **Local fixtures for all transports**: HTTP and SSE tests use local Express-based fixture servers (no external network dependency)
   - **All MCP primitives tested**: Tools, resources, resource templates, and prompts
-  - **Spec compliance tested**: Capability gating, error codes (`-32602`), logging, completions, resource subscriptions, notification forwarding
+  - **Spec compliance tested**: Capability gating, error codes (`-32602`), logging, completions, resource subscriptions, notification forwarding, empty filtered lists
   - **Progress/cancellation tested**: End-to-end progress notification forwarding, downstream abort propagation
   - **Pagination tested**: Fixture server returns 2 pages, verifies filter applies across all pages
   - Test with real-world MCP servers (e.g., chrome-devtools-mcp) to verify compatibility
   - Each test should properly close clients to avoid resource leaks
+- **Coverage**: Configured to report on `src/cli.ts`, `src/filter.ts`, `src/transport.ts` (proxy.ts and index.ts are tested via integration but run as subprocesses so v8 can't instrument them)
 - **Fixtures**: Express-based servers for HTTP/SSE, stdio servers for tools/resources/prompts/pagination/spec-compliance/progress/minimal-capability
 
 ## MCP SDK Usage Patterns
@@ -231,6 +237,7 @@ When working with MCP SDK:
 - **Type**: ES modules (`"type": "module"` in package.json)
 - **Imports**: Always use `.js` extension in imports (TypeScript convention for ESM)
 - **Build**: TypeScript compiles to `dist/` with Node16 module resolution
+- **Exports**: Package exports `filter`, `proxy`, `transport`, and `types` subpaths for programmatic use
 
 ## Documentation
 
@@ -269,19 +276,17 @@ The package is published to npm at https://www.npmjs.com/package/mcp-filter
 ### Publishing Checklist
 
 1. Ensure all tests pass: `pnpm test`
-2. Update version in `package.json` and `src/index.ts`
-3. Update `CHANGELOG.md` with release notes
-4. Build: `pnpm run build`
-5. Create release branch: `git checkout -b release/X.Y.Z`
-6. Commit, push branch, create PR
-7. Publish: `pnpm publish` (done manually by maintainer)
-8. Merge PR to main
+2. Verify version in package.json matches CHANGELOG
+3. Build: `pnpm run build`
+4. Verify `--version` output: `node dist/index.js --version`
+5. Publish: `pnpm publish`
 
 ### Package Configuration
 
 - **Dependencies**: Uses peerDependencies for `@modelcontextprotocol/sdk` to allow consumers to bring their own version
-- **Files included**: Only `dist/`, `README.md`, and `LICENSE` are published (configured via `files` field)
-- **Excluded from package**: Tests, configs, source files (via `.npmignore`)
+- **Exports**: Subpath exports for programmatic use (`mcp-filter/filter`, `mcp-filter/proxy`, etc.)
+- **Files included**: Only `dist/`, `README.md`, `CHANGELOG.md`, and `LICENSE` are published (configured via `files` field)
+- **Excluded from package**: Tests, configs, source files, docs, AGENTS.md (via `.npmignore`)
 - **Version locking**: `.npmrc` has `save-exact=true` for reproducible builds
 
 ## User Preferences
