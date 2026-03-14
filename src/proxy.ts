@@ -115,9 +115,11 @@ export class ProxyServer {
    * Fetches all pages of a paginated MCP list operation.
    * Prevents filter bypass where blocked items on page 2+ would leak through.
    * Caps at MAX_PAGES to prevent infinite loops from buggy upstream cursors.
+   * Accepts an optional AbortSignal to support cancellation mid-pagination.
    */
   private async fetchAllPages<T>(
-    fetchPage: (cursor?: string) => Promise<{ items: T[]; nextCursor?: string }>
+    fetchPage: (cursor?: string) => Promise<{ items: T[]; nextCursor?: string }>,
+    signal?: AbortSignal
   ): Promise<T[]> {
     const MAX_PAGES = 100;
     const allItems: T[] = [];
@@ -125,6 +127,7 @@ export class ProxyServer {
     let pageCount = 0;
 
     do {
+      signal?.throwIfAborted();
       const response = await fetchPage(cursor);
       allItems.push(...response.items);
       cursor = response.nextCursor;
@@ -137,18 +140,22 @@ export class ProxyServer {
   private setupHandlers(upstreamCaps: ServerCapabilities) {
     // ── Tools ──────────────────────────────────────────────────────────
     if (upstreamCaps.tools) {
-      this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-        const tools = await this.fetchAllPages<Tool>(async (cursor) => {
-          const response = await this.client.listTools(
-            cursor ? { cursor } : undefined
-          );
-          return { items: response.tools, nextCursor: response.nextCursor };
-        });
+      this.server.setRequestHandler(
+        ListToolsRequestSchema,
+        async (_request, extra) => {
+          const tools = await this.fetchAllPages<Tool>(async (cursor) => {
+            const response = await this.client.listTools(
+              cursor ? { cursor } : undefined,
+              { signal: extra.signal }
+            );
+            return { items: response.tools, nextCursor: response.nextCursor };
+          }, extra.signal);
 
-        return {
-          tools: this.filter.filterList(tools),
-        };
-      });
+          return {
+            tools: this.filter.filterList(tools),
+          };
+        }
+      );
 
       this.server.setRequestHandler(
         CallToolRequestSchema,
@@ -182,35 +189,44 @@ export class ProxyServer {
 
     // ── Resources ─────────────────────────────────────────────────────
     if (upstreamCaps.resources) {
-      this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-        const resources = await this.fetchAllPages<Resource>(async (cursor) => {
-          const response = await this.client.listResources(
-            cursor ? { cursor } : undefined
+      this.server.setRequestHandler(
+        ListResourcesRequestSchema,
+        async (_request, extra) => {
+          const resources = await this.fetchAllPages<Resource>(
+            async (cursor) => {
+              const response = await this.client.listResources(
+                cursor ? { cursor } : undefined,
+                { signal: extra.signal }
+              );
+              return {
+                items: response.resources,
+                nextCursor: response.nextCursor,
+              };
+            },
+            extra.signal
           );
-          return {
-            items: response.resources,
-            nextCursor: response.nextCursor,
-          };
-        });
 
-        return {
-          resources: this.filter.filterList(resources),
-        };
-      });
+          return {
+            resources: this.filter.filterList(resources),
+          };
+        }
+      );
 
       this.server.setRequestHandler(
         ListResourceTemplatesRequestSchema,
-        async () => {
+        async (_request, extra) => {
           const templates = await this.fetchAllPages<ResourceTemplate>(
             async (cursor) => {
               const response = await this.client.listResourceTemplates(
-                cursor ? { cursor } : undefined
+                cursor ? { cursor } : undefined,
+                { signal: extra.signal }
               );
               return {
                 items: response.resourceTemplates,
                 nextCursor: response.nextCursor,
               };
-            }
+            },
+            extra.signal
           );
 
           return {
@@ -223,6 +239,15 @@ export class ProxyServer {
         ReadResourceRequestSchema,
         async (request, extra) => {
           const options: RequestOptions = { signal: extra.signal };
+          const progressToken = extra._meta?.progressToken;
+          if (progressToken !== undefined) {
+            options.onprogress = (progress) => {
+              void extra.sendNotification({
+                method: "notifications/progress" as const,
+                params: { ...progress, progressToken },
+              });
+            };
+          }
           return await this.client.readResource(request.params, options);
         }
       );
@@ -255,18 +280,25 @@ export class ProxyServer {
 
     // ── Prompts ───────────────────────────────────────────────────────
     if (upstreamCaps.prompts) {
-      this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
-        const prompts = await this.fetchAllPages<Prompt>(async (cursor) => {
-          const response = await this.client.listPrompts(
-            cursor ? { cursor } : undefined
-          );
-          return { items: response.prompts, nextCursor: response.nextCursor };
-        });
+      this.server.setRequestHandler(
+        ListPromptsRequestSchema,
+        async (_request, extra) => {
+          const prompts = await this.fetchAllPages<Prompt>(async (cursor) => {
+            const response = await this.client.listPrompts(
+              cursor ? { cursor } : undefined,
+              { signal: extra.signal }
+            );
+            return {
+              items: response.prompts,
+              nextCursor: response.nextCursor,
+            };
+          }, extra.signal);
 
-        return {
-          prompts: this.filter.filterList(prompts),
-        };
-      });
+          return {
+            prompts: this.filter.filterList(prompts),
+          };
+        }
+      );
 
       this.server.setRequestHandler(
         GetPromptRequestSchema,
@@ -336,20 +368,29 @@ export class ProxyServer {
     // sampling/createMessage: upstream asks proxy to sample from the LLM
     this.client.setRequestHandler(
       CreateMessageRequestSchema,
-      async (request) => {
-        return await this.server.createMessage(request.params);
+      async (request, extra) => {
+        const options: RequestOptions = { signal: extra.signal };
+        return await this.server.createMessage(request.params, options);
       }
     );
 
     // roots/list: upstream asks proxy for filesystem roots
-    this.client.setRequestHandler(ListRootsRequestSchema, async (request) => {
-      return await this.server.listRoots(request.params);
-    });
+    this.client.setRequestHandler(
+      ListRootsRequestSchema,
+      async (request, extra) => {
+        const options: RequestOptions = { signal: extra.signal };
+        return await this.server.listRoots(request.params, options);
+      }
+    );
 
     // elicitation/create: upstream asks proxy to elicit user input
-    this.client.setRequestHandler(ElicitRequestSchema, async (request) => {
-      return await this.server.elicitInput(request.params);
-    });
+    this.client.setRequestHandler(
+      ElicitRequestSchema,
+      async (request, extra) => {
+        const options: RequestOptions = { signal: extra.signal };
+        return await this.server.elicitInput(request.params, options);
+      }
+    );
 
     // ── Notification forwarding (upstream → downstream) ───────────────
     if (upstreamCaps.tools) {
