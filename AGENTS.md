@@ -85,10 +85,13 @@ pnpm run build
 
 4. **Proxy Server** (`src/proxy.ts`)
    - **Dual role**: Acts as both MCP client (to upstream) and MCP server (to caller)
+   - **Two-phase initialization**: Connects to upstream first via `connectToUpstream()`, reads upstream capabilities, then creates the downstream server with mirrored capabilities
+   - **Capability mirroring**: Downstream server advertises the same capabilities as upstream (tools, resources, prompts, logging, completions, resources.subscribe, listChanged flags)
    - **Client side**: Connects to upstream via transport factory (stdio/HTTP/SSE)
    - **Server side**: Exposes filtered interface via `StdioServerTransport`
    - **Pagination-aware**: Drains all pages via cursor before filtering (prevents filter bypass)
-   - **Notification forwarding**: Relays `tools/list_changed`, `resources/list_changed`, `prompts/list_changed` from upstream to downstream
+   - **Notification forwarding**: Relays all upstream→downstream notifications (`list_changed`, `resources/updated`, `notifications/message`)
+   - **Reverse-direction forwarding**: Forwards `sampling/createMessage`, `roots/list`, `elicitation/create` from upstream server to downstream client
    - **Request handlers**: Intercepts list requests, applies filters, forwards call requests
    - Fully transport-agnostic: works with any client transport type
 
@@ -141,8 +144,13 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
 - **Filtering strategy** (transport-agnostic):
   - `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` → drain all pages, then filter before returning
   - `tools/call`, `prompts/get` → block if name matches excluded pattern
+  - `completion/complete` → block if `ref/prompt` references a filtered prompt; forward `ref/resource` completions (same rationale as `resources/read`)
   - `resources/read` → forwarded (cannot filter by URI easily; resource won't appear in list if filtered)
-  - Notifications (`*/list_changed`) → forwarded from upstream to downstream
+  - `resources/subscribe`, `resources/unsubscribe` → forwarded to upstream
+  - `logging/setLevel` → forwarded to upstream
+  - Notifications (`*/list_changed`, `resources/updated`, `notifications/message`) → forwarded from upstream to downstream
+  - Reverse-direction requests (`sampling/createMessage`, `roots/list`, `elicitation/create`) → forwarded from upstream server to downstream client
+  - `notifications/roots/list_changed` → forwarded from downstream client to upstream server
   - Rsync-style: patterns evaluated in order, first match wins
 
 ## Code Organization
@@ -167,11 +175,13 @@ tests/
 │   ├── http-transport.test.ts    # HTTP transport tests (external, requires network)
 │   ├── pagination.test.ts        # Pagination drain-all-pages tests
 │   ├── resources-prompts.test.ts # Resource & prompt filtering tests
+│   ├── spec-compliance.test.ts  # MCP spec compliance (capabilities, logging, completions, subscriptions)
 │   └── readme-examples.test.ts   # Validate README examples
 └── fixtures/     # Test helper servers
     ├── simple-server.ts          # Basic tools (allowed/blocked)
     ├── browser-server.ts         # Browser-like tools for README examples
     ├── full-server.ts            # Tools + resources + prompts
+    ├── spec-server.ts            # Full MCP spec features (logging, completions, subscriptions)
     ├── paginated-server.ts       # Paginated tool list (2 pages)
     ├── http-server.ts            # StreamableHTTP server (Express)
     └── sse-server.ts             # SSE server (Express, deprecated transport)
@@ -188,18 +198,22 @@ tests/
   - Use `describe.sequential()` when spawning multiple MCP servers to avoid EPIPE race conditions
   - **Local fixtures for all transports**: HTTP and SSE tests use local Express-based fixture servers (no external network dependency)
   - **All MCP primitives tested**: Tools, resources, resource templates, and prompts
+  - **Spec compliance tested**: Capability mirroring, logging, completions, resource subscriptions, notification forwarding
   - **Pagination tested**: Fixture server returns 2 pages, verifies filter applies across all pages
   - Test with real-world MCP servers (e.g., chrome-devtools-mcp) to verify compatibility
   - Each test should properly close clients to avoid resource leaks
-- **Fixtures**: Express-based servers for HTTP/SSE, stdio servers for tools/resources/prompts/pagination
+- **Fixtures**: Express-based servers for HTTP/SSE, stdio servers for tools/resources/prompts/pagination/spec-compliance
 
 ## MCP SDK Usage Patterns
 
 When working with MCP SDK:
 
-- **Client methods**: Use high-level methods like `client.listTools()`, `client.callTool(params)`
+- **Client methods**: Use high-level methods like `client.listTools()`, `client.callTool(params)`, `client.complete(params)`, `client.setLoggingLevel(level)`, `client.subscribeResource(params)`
+- **Server methods**: `server.createMessage(params)`, `server.elicitInput(params)`, `server.listRoots(params)`, `server.sendLoggingMessage(params)`, `server.sendResourceUpdated(params)`
 - **Server handlers**: Use `server.setRequestHandler(Schema, handler)` for each request type
-- **Schemas**: Import from `@modelcontextprotocol/sdk/types.js` (e.g., `ListToolsRequestSchema`)
+- **Schemas**: Import from `@modelcontextprotocol/sdk/types.js` (e.g., `ListToolsRequestSchema`, `CompleteRequestSchema`, `SetLevelRequestSchema`)
+- **Capability checks**: SDK enforces capabilities — `Server.registerCapabilities()` must be called before `connect()`. `setRequestHandler()` checks `assertRequestHandlerCapability()`. Client methods check `assertCapabilityForMethod()`
+- **Two-phase init pattern**: Connect client to upstream first to read capabilities, then create server with mirrored capabilities, then connect server to downstream
 - **Transports**:
   - `StdioClientTransport` for connecting to upstream
   - `StdioServerTransport` for exposing server interface
