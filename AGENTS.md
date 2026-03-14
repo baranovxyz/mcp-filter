@@ -87,6 +87,8 @@ pnpm run build
    - **Dual role**: Acts as both MCP client (to upstream) and MCP server (to caller)
    - **Client side**: Connects to upstream via transport factory (stdio/HTTP/SSE)
    - **Server side**: Exposes filtered interface via `StdioServerTransport`
+   - **Pagination-aware**: Drains all pages via cursor before filtering (prevents filter bypass)
+   - **Notification forwarding**: Relays `tools/list_changed`, `resources/list_changed`, `prompts/list_changed` from upstream to downstream
    - **Request handlers**: Intercepts list requests, applies filters, forwards call requests
    - Fully transport-agnostic: works with any client transport type
 
@@ -128,12 +130,19 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
 - **SSE Transport** (deprecated):
   - Supported for backward compatibility with legacy servers
   - Displays deprecation warning when used
+  - Custom headers forwarded via fetch wrapper (EventSourceInit doesn't support headers directly)
   - Consider migrating to HTTP transport for new deployments
 
+- **Connection lifecycle**:
+  - **30s connection timeout**: Prevents indefinite hang on unreachable upstream servers
+  - **Graceful shutdown**: SIGINT/SIGTERM close server and client transports before exiting
+  - **Shutdown guard**: Double-signal protection prevents concurrent cleanup
+
 - **Filtering strategy** (transport-agnostic):
-  - `tools/list`, `resources/list`, `prompts/list` → filter response before returning
+  - `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` → drain all pages, then filter before returning
   - `tools/call`, `prompts/get` → block if name matches excluded pattern
-  - `resources/read` → forwarded (cannot filter by URI easily)
+  - `resources/read` → forwarded (cannot filter by URI easily; resource won't appear in list if filtered)
+  - Notifications (`*/list_changed`) → forwarded from upstream to downstream
   - Rsync-style: patterns evaluated in order, first match wins
 
 ## Code Organization
@@ -149,13 +158,23 @@ src/
 └── proxy.ts      # ProxyServer class: dual MCP client/server
 
 tests/
-├── unit/         # Fast isolated tests (cli, filter, index architecture)
+├── unit/         # Fast isolated tests (cli, filter, transport, index architecture)
 ├── integration/  # Full MCP communication tests
-│   ├── proxy.test.ts         # Core filtering integration tests
-│   ├── subprocess.test.ts    # Stdio transport & subprocess management
-│   ├── http-transport.test.ts # HTTP transport tests (requires network)
-│   └── readme-examples.test.ts # Validate README examples
-└── fixtures/     # Test helper servers (simple-server.ts)
+│   ├── proxy.test.ts             # Core filtering integration tests (stdio)
+│   ├── subprocess.test.ts        # Stdio transport & subprocess management
+│   ├── local-http.test.ts        # HTTP transport tests (local fixture server)
+│   ├── sse-transport.test.ts     # SSE transport tests (local fixture server)
+│   ├── http-transport.test.ts    # HTTP transport tests (external, requires network)
+│   ├── pagination.test.ts        # Pagination drain-all-pages tests
+│   ├── resources-prompts.test.ts # Resource & prompt filtering tests
+│   └── readme-examples.test.ts   # Validate README examples
+└── fixtures/     # Test helper servers
+    ├── simple-server.ts          # Basic tools (allowed/blocked)
+    ├── browser-server.ts         # Browser-like tools for README examples
+    ├── full-server.ts            # Tools + resources + prompts
+    ├── paginated-server.ts       # Paginated tool list (2 pages)
+    ├── http-server.ts            # StreamableHTTP server (Express)
+    └── sse-server.ts             # SSE server (Express, deprecated transport)
 ```
 
 ## Testing Approach
@@ -164,11 +183,15 @@ tests/
 - **Unit tests**: Test pure functions/classes in isolation
   - Can verify architecture patterns by reading source files (see `tests/unit/index.test.ts`)
   - Validate no anti-patterns exist (e.g., manual subprocess spawning)
+  - Transport factory tested with all transport types and error paths
 - **Integration tests**: Spawn actual MCP servers and test end-to-end communication
   - Use `describe.sequential()` when spawning multiple MCP servers to avoid EPIPE race conditions
+  - **Local fixtures for all transports**: HTTP and SSE tests use local Express-based fixture servers (no external network dependency)
+  - **All MCP primitives tested**: Tools, resources, resource templates, and prompts
+  - **Pagination tested**: Fixture server returns 2 pages, verifies filter applies across all pages
   - Test with real-world MCP servers (e.g., chrome-devtools-mcp) to verify compatibility
   - Each test should properly close clients to avoid resource leaks
-- **Fixtures**: `tests/fixtures/simple-server.ts` provides test MCP server with allowed/blocked tools
+- **Fixtures**: Express-based servers for HTTP/SSE, stdio servers for tools/resources/prompts/pagination
 
 ## MCP SDK Usage Patterns
 

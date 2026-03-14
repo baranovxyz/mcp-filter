@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current Version: 0.2.0
+## Current Version: 0.5.x
 
 ### ✅ Implemented
 
@@ -8,7 +8,15 @@
 - `--include <pattern>` - Whitelist mode with glob patterns
 - Rsync-style filtering (first match wins)
 - Pattern evaluation order preservation
-- Basic error messages
+- Multi-transport support: stdio, HTTP (StreamableHTTP), SSE (deprecated)
+- `--upstream-url` for remote HTTP/SSE servers
+- `--transport` for explicit transport selection
+- `--header` for custom HTTP headers (HTTP and SSE)
+- Pagination support: drains all pages before filtering
+- Resource templates filtering (`resources/templates/list`)
+- Notification forwarding (`*/list_changed`)
+- Graceful shutdown with transport cleanup
+- 30s connection timeout for upstream servers
 
 ## Potential Future Features
 
