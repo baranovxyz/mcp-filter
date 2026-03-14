@@ -4,16 +4,21 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   ToolListChangedNotificationSchema,
   ResourceListChangedNotificationSchema,
   PromptListChangedNotificationSchema,
+  ResourceTemplateSchema,
   type Tool,
   type Resource,
   type Prompt,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { z } from "zod";
+
+type ResourceTemplate = z.infer<typeof ResourceTemplateSchema>;
 import { Filter } from "./filter.js";
 
 export class ProxyServer {
@@ -102,6 +107,27 @@ export class ProxyServer {
         resources: this.filter.filterList(resources),
       };
     });
+
+    this.server.setRequestHandler(
+      ListResourceTemplatesRequestSchema,
+      async () => {
+        const templates = await this.fetchAllPages<ResourceTemplate>(
+          async (cursor) => {
+            const response = await this.client.listResourceTemplates(
+              cursor ? { cursor } : undefined
+            );
+            return {
+              items: response.resourceTemplates,
+              nextCursor: response.nextCursor,
+            };
+          }
+        );
+
+        return {
+          resourceTemplates: this.filter.filterList(templates),
+        };
+      }
+    );
 
     this.server.setRequestHandler(
       ReadResourceRequestSchema,
