@@ -56,6 +56,26 @@ export function createClientTransport(config: TransportConfig): Transport {
         throw new Error(`Invalid SSE URL: ${config.url}`);
       }
 
+      // Pass custom headers to POST requests via requestInit.
+      // SSE stream headers are injected via a custom fetch wrapper since
+      // EventSourceInit doesn't support headers directly.
+      const hasHeaders =
+        config.headers && Object.keys(config.headers).length > 0;
+
+      if (hasHeaders) {
+        const customHeaders = config.headers as Record<string, string>;
+        return new SSEClientTransport(url, {
+          eventSourceInit: {
+            fetch: (url, init) =>
+              fetch(url, {
+                ...init,
+                headers: { ...init.headers, ...customHeaders },
+              }),
+          },
+          requestInit: { headers: customHeaders },
+        });
+      }
+
       return new SSEClientTransport(url);
     }
 
