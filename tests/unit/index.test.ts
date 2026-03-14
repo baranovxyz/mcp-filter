@@ -64,8 +64,8 @@ describe("Index Architecture", () => {
       expect(indexSource).toContain("StdioServerTransport");
     });
 
-    it("should connect client transport to proxy client", () => {
-      expect(indexSource).toContain("proxy.getClient().connect(clientTransport)");
+    it("should connect to upstream via two-phase init", () => {
+      expect(indexSource).toContain("proxy.connectToUpstream(clientTransport)");
     });
 
     it("should connect server transport to proxy server", () => {

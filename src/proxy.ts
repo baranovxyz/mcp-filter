@@ -11,42 +11,97 @@ import {
   ToolListChangedNotificationSchema,
   ResourceListChangedNotificationSchema,
   PromptListChangedNotificationSchema,
+  SetLevelRequestSchema,
+  LoggingMessageNotificationSchema,
+  CompleteRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
+  ResourceUpdatedNotificationSchema,
+  CreateMessageRequestSchema,
+  ElicitRequestSchema,
+  ListRootsRequestSchema,
+  RootsListChangedNotificationSchema,
   ResourceTemplateSchema,
   type Tool,
   type Resource,
   type Prompt,
+  type ServerCapabilities,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { z } from "zod";
 
 type ResourceTemplate = z.infer<typeof ResourceTemplateSchema>;
 import { Filter } from "./filter.js";
 
 export class ProxyServer {
-  private server: Server;
+  private server!: Server;
   private client: Client;
   private filter: Filter;
+  private serverInfo: { name: string; version: string };
 
   constructor(serverInfo: { name: string; version: string }, filter: Filter) {
     this.filter = filter;
+    this.serverInfo = serverInfo;
+
+    // Create client with capabilities for reverse-direction request support.
+    // These declare what the proxy-as-client can handle when the upstream
+    // server sends sampling, elicitation, or roots requests.
     this.client = new Client(
       {
         name: `${serverInfo.name}-client`,
         version: serverInfo.version,
       },
       {
-        capabilities: {},
+        capabilities: {
+          sampling: {},
+          elicitation: {},
+          roots: { listChanged: true },
+        },
       }
     );
+  }
 
-    this.server = new Server(serverInfo, {
-      capabilities: {
-        tools: {},
-        resources: {},
-        prompts: {},
-      },
+  /**
+   * Connects to the upstream server, reads its capabilities, then creates
+   * the downstream Server with mirrored capabilities and registers all handlers.
+   *
+   * Must be called before getServer().connect().
+   */
+  async connectToUpstream(clientTransport: Transport): Promise<void> {
+    await this.client.connect(clientTransport);
+
+    const upstreamCaps = this.client.getServerCapabilities() ?? {};
+
+    // Create the Server with capabilities mirrored from upstream
+    this.server = new Server(this.serverInfo, {
+      capabilities: this.buildCapabilities(upstreamCaps),
     });
 
-    this.setupHandlers();
+    this.setupHandlers(upstreamCaps);
+  }
+
+  /**
+   * Builds server capabilities by mirroring upstream capabilities.
+   * Always includes tools/resources/prompts as a baseline for backward compatibility.
+   * Adds logging, completions, and resources.subscribe if upstream supports them.
+   */
+  private buildCapabilities(upstream: ServerCapabilities): ServerCapabilities {
+    const caps: ServerCapabilities = {
+      // Baseline: always advertise core primitives
+      tools: upstream.tools ? { ...upstream.tools } : {},
+      resources: upstream.resources ? { ...upstream.resources } : {},
+      prompts: upstream.prompts ? { ...upstream.prompts } : {},
+    };
+
+    // Mirror optional capabilities from upstream
+    if (upstream.logging) {
+      caps.logging = {};
+    }
+    if (upstream.completions) {
+      caps.completions = {};
+    }
+
+    return caps;
   }
 
   /**
@@ -68,8 +123,8 @@ export class ProxyServer {
     return allItems;
   }
 
-  private setupHandlers() {
-    // Tools
+  private setupHandlers(upstreamCaps: ServerCapabilities) {
+    // ── Tools ──────────────────────────────────────────────────────────
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       const tools = await this.fetchAllPages<Tool>(async (cursor) => {
         const response = await this.client.listTools(
@@ -91,7 +146,7 @@ export class ProxyServer {
       return await this.client.callTool(request.params);
     });
 
-    // Resources
+    // ── Resources ─────────────────────────────────────────────────────
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
       const resources = await this.fetchAllPages<Resource>(async (cursor) => {
         const response = await this.client.listResources(
@@ -138,7 +193,24 @@ export class ProxyServer {
       }
     );
 
-    // Prompts
+    // ── Resource Subscriptions ────────────────────────────────────────
+    if (upstreamCaps.resources?.subscribe) {
+      this.server.setRequestHandler(
+        SubscribeRequestSchema,
+        async (request) => {
+          return await this.client.subscribeResource(request.params);
+        }
+      );
+
+      this.server.setRequestHandler(
+        UnsubscribeRequestSchema,
+        async (request) => {
+          return await this.client.unsubscribeResource(request.params);
+        }
+      );
+    }
+
+    // ── Prompts ───────────────────────────────────────────────────────
     this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
       const prompts = await this.fetchAllPages<Prompt>(async (cursor) => {
         const response = await this.client.listPrompts(
@@ -162,7 +234,48 @@ export class ProxyServer {
       return await this.client.getPrompt(request.params);
     });
 
-    // Forward list-changed notifications from upstream to downstream
+    // ── Logging ───────────────────────────────────────────────────────
+    if (upstreamCaps.logging) {
+      // Forward logging/setLevel to upstream (replaces SDK's default handler)
+      this.server.setRequestHandler(SetLevelRequestSchema, async (request) => {
+        return await this.client.setLoggingLevel(request.params.level);
+      });
+    }
+
+    // ── Completions ───────────────────────────────────────────────────
+    if (upstreamCaps.completions) {
+      this.server.setRequestHandler(CompleteRequestSchema, async (request) => {
+        const ref = request.params.ref;
+        // Block completions referencing filtered prompts
+        if (ref.type === "ref/prompt" && this.filter.shouldExclude(ref.name)) {
+          throw new Error(`Prompt '${ref.name}' is excluded by filter`);
+        }
+        // ref/resource completions forwarded without filtering (same rationale
+        // as resources/read — the template won't appear in list if filtered)
+        return await this.client.complete(request.params);
+      });
+    }
+
+    // ── Reverse-direction requests (upstream server → downstream client) ──
+    // sampling/createMessage: upstream asks proxy to sample from the LLM
+    this.client.setRequestHandler(
+      CreateMessageRequestSchema,
+      async (request) => {
+        return await this.server.createMessage(request.params);
+      }
+    );
+
+    // roots/list: upstream asks proxy for filesystem roots
+    this.client.setRequestHandler(ListRootsRequestSchema, async (request) => {
+      return await this.server.listRoots(request.params);
+    });
+
+    // elicitation/create: upstream asks proxy to elicit user input
+    this.client.setRequestHandler(ElicitRequestSchema, async (request) => {
+      return await this.server.elicitInput(request.params);
+    });
+
+    // ── Notification forwarding (upstream → downstream) ───────────────
     this.client.setNotificationHandler(
       ToolListChangedNotificationSchema,
       async () => {
@@ -181,6 +294,35 @@ export class ProxyServer {
       PromptListChangedNotificationSchema,
       async () => {
         await this.server.sendPromptListChanged();
+      }
+    );
+
+    // Forward resource update notifications from upstream
+    if (upstreamCaps.resources) {
+      this.client.setNotificationHandler(
+        ResourceUpdatedNotificationSchema,
+        async (notification) => {
+          await this.server.sendResourceUpdated(notification.params);
+        }
+      );
+    }
+
+    // Forward logging messages from upstream
+    if (upstreamCaps.logging) {
+      this.client.setNotificationHandler(
+        LoggingMessageNotificationSchema,
+        async (notification) => {
+          await this.server.sendLoggingMessage(notification.params);
+        }
+      );
+    }
+
+    // ── Notification forwarding (downstream → upstream) ───────────────
+    // Forward roots/list_changed from downstream client to upstream server
+    this.server.setNotificationHandler(
+      RootsListChangedNotificationSchema,
+      async () => {
+        await this.client.sendRootsListChanged();
       }
     );
   }

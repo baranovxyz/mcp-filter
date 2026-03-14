@@ -75,13 +75,13 @@ Examples:
     filter
   );
 
-  // Connect client to upstream server
-  // Transport factory handles creating the appropriate transport (stdio, http, sse)
+  // Connect to upstream server, read its capabilities, and create the
+  // downstream server with mirrored capabilities and forwarding handlers.
   const clientTransport = createClientTransport(config.transportConfig);
 
   const CONNECTION_TIMEOUT_MS = 30_000;
   await Promise.race([
-    proxy.getClient().connect(clientTransport),
+    proxy.connectToUpstream(clientTransport),
     new Promise<never>((_, reject) =>
       setTimeout(
         () => reject(new Error("Timed out connecting to upstream server")),
