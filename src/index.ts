@@ -88,8 +88,17 @@ Examples:
   logger.success("MCP filter proxy ready");
 
   // Handle cleanup
-  const cleanup = () => {
+  let isShuttingDown = false;
+  const cleanup = async () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     logger.info("Shutting down...");
+    try {
+      await proxy.getServer().close();
+      await proxy.getClient().close();
+    } catch {
+      // Best-effort cleanup — don't block exit on errors
+    }
     process.exit(0);
   };
 
