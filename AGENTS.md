@@ -86,7 +86,7 @@ pnpm run build
 
 4. **Proxy Server** (`src/proxy.ts`)
    - **Dual role**: Acts as both MCP client (to upstream) and MCP server (to caller)
-   - **Two-phase initialization**: Connects to upstream first via `connectToUpstream()`, reads upstream capabilities, then creates the downstream server with mirrored capabilities
+   - **Two-phase initialization**: Connects to upstream first via `connectToUpstream()`, reads upstream capabilities and instructions, then creates the downstream server with mirrored capabilities and instructions
    - **Capability gating**: Only advertises capabilities upstream actually supports — does NOT add tools/resources/prompts if upstream lacks them. Handlers are conditionally registered to match.
    - **Client side**: Connects to upstream via transport factory (stdio/HTTP/SSE)
    - **Server side**: Exposes filtered interface via `StdioServerTransport`
@@ -142,9 +142,10 @@ MCP Client → [ProxyServer.server] → Filter → [ProxyServer.client] → Upst
   - Consider migrating to HTTP transport for new deployments
 
 - **Connection lifecycle**:
-  - **30s connection timeout**: Prevents indefinite hang on unreachable upstream servers
+  - **30s connection timeout**: Prevents indefinite hang on unreachable upstream servers; timer is cleared on success to prevent leaks
   - **Graceful shutdown**: SIGINT/SIGTERM close server and client transports before exiting
   - **Shutdown guard**: Double-signal protection prevents concurrent cleanup
+  - **Upstream close propagation**: `client.onerror`/`client.onclose` handlers detect upstream transport failures and trigger graceful shutdown
 
 - **Filtering strategy** (transport-agnostic):
   - `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` → drain all pages (with signal forwarding), then filter before returning
@@ -182,12 +183,13 @@ tests/
 │   ├── resources-prompts.test.ts # Resource & prompt filtering tests
 │   ├── spec-compliance.test.ts   # MCP spec compliance (capabilities, logging, completions, subscriptions, error codes, empty lists)
 │   ├── progress-cancellation.test.ts # Progress forwarding & cancellation propagation tests
-│   └── readme-examples.test.ts   # Validate README examples
+│   ├── readme-examples.test.ts   # Validate README examples
+│   └── reliability.test.ts      # Instructions forwarding, notification forwarding, transport close propagation
 └── fixtures/     # Test helper servers
     ├── simple-server.ts          # Basic tools (allowed/blocked)
     ├── browser-server.ts         # Browser-like tools for README examples
     ├── full-server.ts            # Tools + resources + prompts
-    ├── spec-server.ts            # Full MCP spec features (logging, completions, subscriptions, progress)
+    ├── spec-server.ts            # Full MCP spec features (logging, completions, subscriptions, progress, instructions)
     ├── minimal-server.ts         # Tools-only server (no resources/prompts) for capability gating tests
     ├── paginated-server.ts       # Paginated tool list (2 pages)
     ├── http-server.ts            # StreamableHTTP server (Express)
@@ -226,7 +228,7 @@ When working with MCP SDK:
 - **Request options**: Pass `{ signal: extra.signal, onprogress }` as `RequestOptions` to client methods for cancellation/progress
 - **Schemas**: Import from `@modelcontextprotocol/sdk/types.js` (e.g., `ListToolsRequestSchema`, `McpError`, `ErrorCode`)
 - **Capability checks**: SDK enforces capabilities — `setRequestHandler()` checks `assertRequestHandlerCapability()`. Only register handlers for capabilities the server declares
-- **Two-phase init pattern**: Connect client to upstream first to read capabilities, then create server with mirrored capabilities, then connect server to downstream
+- **Two-phase init pattern**: Connect client to upstream first to read capabilities and instructions, then create server with mirrored capabilities/instructions, then connect server to downstream
 - **Transports**:
   - `StdioClientTransport` for connecting to upstream
   - `StdioServerTransport` for exposing server interface
