@@ -50,11 +50,47 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: { message: { type: "string" } },
       },
     },
+    {
+      name: "slow_tool",
+      description: "A slow tool that sends progress notifications",
+      inputSchema: {
+        type: "object" as const,
+        properties: {},
+      },
+    },
   ],
 }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name } = request.params;
+
+  if (name === "slow_tool") {
+    const progressToken = extra._meta?.progressToken;
+    for (let i = 1; i <= 3; i++) {
+      if (progressToken !== undefined) {
+        await extra.sendNotification({
+          method: "notifications/progress",
+          params: {
+            progressToken,
+            progress: i,
+            total: 3,
+            message: `Step ${i} of 3`,
+          },
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (extra.signal?.aborted) {
+        return {
+          content: [{ type: "text", text: "Cancelled" }],
+          isError: true,
+        };
+      }
+    }
+    return {
+      content: [{ type: "text", text: "Slow tool completed" }],
+    };
+  }
+
   return {
     content: [
       { type: "text", text: `Called: ${name} with ${JSON.stringify(request.params.arguments)}` },

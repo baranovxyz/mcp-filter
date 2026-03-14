@@ -379,7 +379,7 @@ describe.sequential("MCP Spec Compliance", () => {
       const prompts = await client.listPrompts();
       const templates = await client.listResourceTemplates();
 
-      expect(tools.tools.length).toBe(2);
+      expect(tools.tools.length).toBe(3);
       expect(resources.resources.length).toBe(2);
       expect(prompts.prompts.length).toBe(2);
       expect(templates.resourceTemplates.length).toBe(2);
@@ -511,6 +511,102 @@ describe.sequential("MCP Spec Compliance", () => {
 
       const content = result.content as Array<{ type: string; text?: string }>;
       expect(content[0].type).toBe("text");
+    });
+
+    it("should return InvalidParams (-32602) error code for excluded tool", async () => {
+      await createClient(["--exclude", "blocked_*"]);
+
+      try {
+        await client.callTool({
+          name: "blocked_tool",
+          arguments: {},
+        });
+        expect.unreachable("Should have thrown");
+      } catch (error: unknown) {
+        expect((error as { code?: number }).code).toBe(-32602);
+      }
+    });
+
+    it("should return InvalidParams (-32602) error code for excluded prompt", async () => {
+      await createClient(["--exclude", "blocked_*"]);
+
+      try {
+        await client.getPrompt({
+          name: "blocked_prompt",
+          arguments: { topic: "test" },
+        });
+        expect.unreachable("Should have thrown");
+      } catch (error: unknown) {
+        expect((error as { code?: number }).code).toBe(-32602);
+      }
+    });
+
+    it("should return InvalidParams (-32602) error code for excluded completion", async () => {
+      await createClient(["--exclude", "blocked_*"]);
+
+      try {
+        await client.complete({
+          ref: { type: "ref/prompt", name: "blocked_prompt" },
+          argument: { name: "topic", value: "opt" },
+        });
+        expect.unreachable("Should have thrown");
+      } catch (error: unknown) {
+        expect((error as { code?: number }).code).toBe(-32602);
+      }
+    });
+  });
+
+  // ===================================================================
+  // 11. CAPABILITY GATING
+  // ===================================================================
+  describe("Capability Gating", () => {
+    it("should only advertise capabilities that upstream supports", async () => {
+      const minimalServer = path.resolve(
+        __dirname,
+        "../fixtures/minimal-server.ts"
+      );
+
+      client = new Client(
+        { name: "cap-test-client", version: "1.0.0" },
+        {}
+      );
+
+      const transport = new StdioClientTransport({
+        command: "node",
+        args: [filterBin, "--", "npx", "tsx", minimalServer],
+      });
+
+      await client.connect(transport);
+
+      const caps = client.getServerCapabilities();
+      expect(caps?.tools).toBeDefined();
+      expect(caps?.resources).toBeUndefined();
+      expect(caps?.prompts).toBeUndefined();
+      expect(caps?.logging).toBeUndefined();
+      expect(caps?.completions).toBeUndefined();
+    });
+
+    it("should still allow tool operations with minimal upstream", async () => {
+      const minimalServer = path.resolve(
+        __dirname,
+        "../fixtures/minimal-server.ts"
+      );
+
+      client = new Client(
+        { name: "cap-test-client", version: "1.0.0" },
+        {}
+      );
+
+      const transport = new StdioClientTransport({
+        command: "node",
+        args: [filterBin, "--", "npx", "tsx", minimalServer],
+      });
+
+      await client.connect(transport);
+
+      const result = await client.listTools();
+      expect(result.tools.length).toBe(1);
+      expect(result.tools[0].name).toBe("test_tool");
     });
   });
 });
