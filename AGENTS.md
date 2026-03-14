@@ -232,6 +232,11 @@ When working with MCP SDK:
 - **Imports**: Always use `.js` extension in imports (TypeScript convention for ESM)
 - **Build**: TypeScript compiles to `dist/` with Node16 module resolution
 
+## Documentation
+
+- **MUST**: Update `AGENTS.md` in the same commit (or session) as any code change that affects documented structure, capabilities, conventions, test fixtures, or SDK patterns. Do not leave docs stale.
+- Sections to check: Code Organization tree, Architecture bullet points, Testing Approach, MCP SDK Usage Patterns, Debugging.
+
 ## Design Decisions
 
 - **No localization (`--locale`)**: English tool descriptions work well cross-lingually. See [docs/architecture-decisions.md](docs/architecture-decisions.md).
