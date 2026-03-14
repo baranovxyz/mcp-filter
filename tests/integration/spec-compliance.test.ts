@@ -394,7 +394,7 @@ describe.sequential("MCP Spec Compliance", () => {
       const prompts = await client.listPrompts();
       const templates = await client.listResourceTemplates();
 
-      expect(tools.tools.length).toBe(3);
+      expect(tools.tools.length).toBe(4);
       expect(resources.resources.length).toBe(2);
       expect(prompts.prompts.length).toBe(2);
       expect(templates.resourceTemplates.length).toBe(2);

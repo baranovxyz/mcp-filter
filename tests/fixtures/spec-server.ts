@@ -28,6 +28,8 @@ const server = new Server(
       logging: {},
       completions: {},
     },
+    instructions:
+      "This is a test server. Use allowed_tool for testing. Do not use blocked_tool.",
   }
 );
 
@@ -58,11 +60,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {},
       },
     },
+    {
+      name: "log_tool",
+      description: "A tool that emits a logging message",
+      inputSchema: {
+        type: "object" as const,
+        properties: {},
+      },
+    },
   ],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name } = request.params;
+
+  if (name === "log_tool") {
+    await server.sendLoggingMessage({
+      level: "warning",
+      logger: "spec-server",
+      data: "Log from log_tool",
+    });
+    return {
+      content: [{ type: "text", text: "Log message sent" }],
+    };
+  }
 
   if (name === "slow_tool") {
     const progressToken = extra._meta?.progressToken;
