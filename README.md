@@ -37,8 +37,8 @@ npm install -g mcp-filter
 # Filter a local MCP server (stdio)
 npx mcp-filter --exclude "browser_close" --exclude "browser_evaluate" -- npx @playwright/mcp
 
-# Filter a remote MCP server (HTTP)
-npx mcp-filter --exclude "resolve-*" --upstream-url https://mcp.context7.com/mcp
+# Filter a remote MCP server (HTTP) — block refunds on Stripe
+npx mcp-filter --exclude "create_refund" --upstream-url https://mcp.stripe.com
 
 # Whitelist mode — only allow specific tools
 npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp
@@ -77,13 +77,14 @@ npx mcp-filter --exclude "debug*" -- node my-mcp-server.js
 ### Remote Servers (HTTP)
 
 ```bash
-# Filter a public HTTP MCP server (Context7 docs)
-npx mcp-filter --exclude "resolve-*" --upstream-url https://mcp.context7.com/mcp
+# Block refunds and customer deletion on Stripe
+npx mcp-filter --exclude "create_refund" --exclude "delete_*" \
+  --upstream-url https://mcp.stripe.com
 
-# With authentication headers (e.g., Notion)
-npx mcp-filter --exclude "delete_*" \
-  --upstream-url https://mcp.notion.com/mcp \
-  --header "Authorization: Bearer your-token-here"
+# Read-only Notion (block all mutations)
+npx mcp-filter \
+  --exclude "create_*" --exclude "update_*" --exclude "delete_*" --exclude "archive_*" \
+  --upstream-url https://mcp.notion.com/mcp
 
 # Multiple headers
 npx mcp-filter --exclude "write_*" \
@@ -285,10 +286,11 @@ claude mcp add --scope user playwright-safe -- \
 **Remote HTTP server (no second `--`):**
 
 ```bash
-claude mcp add context7-docs -- \
+claude mcp add stripe-safe -- \
   npx mcp-filter \
-    --exclude "resolve-*" \
-    --upstream-url https://mcp.context7.com/mcp
+    --exclude "create_refund" \
+    --exclude "delete_*" \
+    --upstream-url https://mcp.stripe.com
 ```
 
 **Command structure:** first `--` separates Claude options from mcp-filter; second `--` separates mcp-filter options from the upstream command.
@@ -376,32 +378,35 @@ Add to `.cursor/mcp.json` or `~/.cursor/mcp.json`:
 }
 ```
 
-**Remote HTTP server (Context7):**
+**Remote HTTP server (Stripe — block refunds):**
 
 ```json
 {
   "mcpServers": {
-    "context7-docs": {
+    "stripe-safe": {
       "command": "npx",
       "args": [
         "mcp-filter",
-        "--exclude", "resolve-*",
-        "--upstream-url", "https://mcp.context7.com/mcp"
+        "--exclude", "create_refund",
+        "--exclude", "delete_*",
+        "--upstream-url", "https://mcp.stripe.com"
       ]
     }
   }
 }
 ```
 
-**Remote server with auth (Notion):**
+**Remote server with auth (Notion — read only):**
 
 ```json
 {
   "mcpServers": {
-    "notion-safe": {
+    "notion-readonly": {
       "command": "npx",
       "args": [
         "mcp-filter",
+        "--exclude", "create_*",
+        "--exclude", "update_*",
         "--exclude", "delete_*",
         "--exclude", "archive_*",
         "--upstream-url", "https://mcp.notion.com/mcp",
