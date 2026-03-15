@@ -38,7 +38,7 @@ npm install -g mcp-filter
 npx mcp-filter --exclude "browser_close" --exclude "browser_evaluate" -- npx @playwright/mcp
 
 # Filter a remote MCP server (HTTP)
-npx mcp-filter --exclude "delete_*" --upstream-url https://mcp.notion.com/mcp
+npx mcp-filter --exclude "resolve-*" --upstream-url https://mcp.context7.com/mcp
 
 # Whitelist mode — only allow specific tools
 npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp
@@ -77,12 +77,12 @@ npx mcp-filter --exclude "debug*" -- node my-mcp-server.js
 ### Remote Servers (HTTP)
 
 ```bash
-# Filter a remote HTTP MCP server
-npx mcp-filter --exclude "delete_*" --upstream-url https://mcp.notion.com/mcp
+# Filter a public HTTP MCP server (Context7 docs)
+npx mcp-filter --exclude "resolve-*" --upstream-url https://mcp.context7.com/mcp
 
-# With authentication headers
-npx mcp-filter --exclude "admin_*" \
-  --upstream-url https://api.example.com/mcp \
+# With authentication headers (e.g., Notion)
+npx mcp-filter --exclude "delete_*" \
+  --upstream-url https://mcp.notion.com/mcp \
   --header "Authorization: Bearer your-token-here"
 
 # Multiple headers
@@ -282,6 +282,15 @@ claude mcp add --scope user playwright-safe -- \
   npx mcp-filter --include "browser_*" -- npx @playwright/mcp@latest
 ```
 
+**Remote HTTP server (no second `--`):**
+
+```bash
+claude mcp add context7-docs -- \
+  npx mcp-filter \
+    --exclude "resolve-*" \
+    --upstream-url https://mcp.context7.com/mcp
+```
+
 **Command structure:** first `--` separates Claude options from mcp-filter; second `--` separates mcp-filter options from the upstream command.
 
 <details>
@@ -367,7 +376,24 @@ Add to `.cursor/mcp.json` or `~/.cursor/mcp.json`:
 }
 ```
 
-**Remote server with auth:**
+**Remote HTTP server (Context7):**
+
+```json
+{
+  "mcpServers": {
+    "context7-docs": {
+      "command": "npx",
+      "args": [
+        "mcp-filter",
+        "--exclude", "resolve-*",
+        "--upstream-url", "https://mcp.context7.com/mcp"
+      ]
+    }
+  }
+}
+```
+
+**Remote server with auth (Notion):**
 
 ```json
 {

@@ -1,6 +1,6 @@
 {
   "name": "mcp-filter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server proxy to filter tools, resources, and prompts from upstream MCP servers",
   "type": "module",
   "bin": {
