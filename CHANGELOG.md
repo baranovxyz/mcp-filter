@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-03-14
+
+### Added
+- `--help` and `--version` CLI flags
+- CI workflow (GitHub Actions, Node 20/22/24)
+- CONTRIBUTING.md for OSS contributors
+- Test for "all items filtered out" empty-list edge case
+- Tests for `--help`, `--version`, and invalid CLI args
+
+### Changed
+- **Stable release**: Public API is now considered stable
+- Version is now read from package.json at runtime (no longer hardcoded)
+- List operations (`tools/list`, `resources/list`, `prompts/list`, `resources/templates/list`) now forward AbortSignal for cancellation support
+- `fetchAllPages()` accepts AbortSignal and checks it between pages
+- `resources/read` now forwards progress notifications (like `tools/call` and `prompts/get`)
+- Reverse-direction handlers (`sampling/createMessage`, `roots/list`, `elicitation/create`) now forward cancellation signals
+
+### Fixed
+- Cancellation not propagated during paginated list operations
+- Missing signal forwarding in reverse-direction request handlers
+
 ## [0.6.0] - 2025-12-02
 
 ### Added
@@ -67,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-003 documenting subprocess delegation pattern
 - Claude Code configuration with custom slash commands
 
-## [0.3.0] - 2025-01-XX
+## [0.3.0] - 2025-09-15
 
 ### Added
 - Rsync-style pattern evaluation (first match wins)
@@ -76,13 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Pattern matching now evaluates in order with first-match-wins semantics
 
-## [0.2.0] - 2025-01-XX
+## [0.2.0] - 2025-09-01
 
 ### Added
 - Comprehensive documentation updates
 - Testing infrastructure with Vitest
 
-## [0.1.0] - 2025-01-XX
+## [0.1.0] - 2025-08-15
 
 ### Added
 - Initial release

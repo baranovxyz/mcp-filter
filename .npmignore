@@ -7,6 +7,7 @@ test-server.ts
 tsconfig.json
 vitest.config.ts
 .gitignore
+.npmrc
 
 # Development files
 *.log
@@ -14,8 +15,14 @@ vitest.config.ts
 coverage/
 .vitest-cache/
 
-# Documentation that's not needed in package
+# Documentation not needed in package
 CLAUDE.md
+AGENTS.md
+CONTRIBUTING.md
+docs/
+
+# Claude Code
+.claude/
 
 # Git
 .git/

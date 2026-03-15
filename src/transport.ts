@@ -2,6 +2,7 @@ import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { logger } from "./logger.js";
 import type { TransportConfig } from "./types.js";
 
 /**
@@ -44,8 +45,8 @@ export function createClientTransport(config: TransportConfig): Transport {
     }
 
     case "sse": {
-      console.warn(
-        "⚠️  WARNING: SSE transport is deprecated as of protocol version 2024-11-05. " +
+      logger.warn(
+        "SSE transport is deprecated as of protocol version 2024-11-05. " +
           "Consider using HTTP transport instead for better performance and compatibility."
       );
 
@@ -54,6 +55,26 @@ export function createClientTransport(config: TransportConfig): Transport {
         url = new URL(config.url);
       } catch (e) {
         throw new Error(`Invalid SSE URL: ${config.url}`);
+      }
+
+      // Pass custom headers to POST requests via requestInit.
+      // SSE stream headers are injected via a custom fetch wrapper since
+      // EventSourceInit doesn't support headers directly.
+      const hasHeaders =
+        config.headers && Object.keys(config.headers).length > 0;
+
+      if (hasHeaders) {
+        const customHeaders = config.headers as Record<string, string>;
+        return new SSEClientTransport(url, {
+          eventSourceInit: {
+            fetch: (url, init) =>
+              fetch(url, {
+                ...init,
+                headers: { ...init.headers, ...customHeaders },
+              }),
+          },
+          requestInit: { headers: customHeaders },
+        });
       }
 
       return new SSEClientTransport(url);

@@ -1,14 +1,30 @@
 # Roadmap
 
-## Current Version: 0.2.0
+## Current Version: 1.0.0 (Stable)
 
 ### ✅ Implemented
 
-- `--exclude <pattern>` - Block items matching glob pattern
-- `--include <pattern>` - Whitelist mode with glob patterns
-- Rsync-style filtering (first match wins)
-- Pattern evaluation order preservation
-- Basic error messages
+- `--exclude <pattern>` — Block items matching glob pattern
+- `--include <pattern>` — Whitelist mode with glob patterns
+- `--help` and `--version` flags
+- Rsync-style filtering (first match wins, order matters)
+- Multi-transport support: stdio, HTTP (StreamableHTTP), SSE (deprecated)
+- `--upstream-url` for remote HTTP/SSE servers
+- `--transport` for explicit transport selection
+- `--header` for custom HTTP headers (HTTP and SSE)
+- Pagination support: drains all pages before filtering (max 100 pages)
+- Resource templates filtering (`resources/templates/list`)
+- Notification forwarding (`*/list_changed`, `resources/updated`, `notifications/message`)
+- Reverse-direction request forwarding (`sampling/createMessage`, `roots/list`, `elicitation/create`)
+- Progress notification forwarding on `tools/call`, `prompts/get`, `resources/read`
+- Cancellation propagation (downstream abort → upstream `notifications/cancelled`)
+- AbortSignal forwarding on all list operations and reverse-direction handlers
+- Capability gating (only advertises what upstream supports)
+- Instructions forwarding from upstream server
+- Graceful shutdown with transport cleanup (SIGINT/SIGTERM)
+- Upstream close propagation (detects transport failures)
+- 30s connection timeout for upstream servers
+- Version read from package.json at runtime
 
 ## Potential Future Features
 
