@@ -29,6 +29,11 @@ MCP servers expose tools, resources, and prompts to AI agents — but you don't 
 ## Quick Start
 
 ```bash
+npm install -g mcp-filter
+# or use directly with npx (no install needed)
+```
+
+```bash
 # Filter a local MCP server (stdio)
 npx mcp-filter --exclude "browser_close" --exclude "browser_evaluate" -- npx @playwright/mcp
 
@@ -37,14 +42,6 @@ npx mcp-filter --exclude "delete_*" --upstream-url https://mcp.notion.com/mcp
 
 # Whitelist mode — only allow specific tools
 npx mcp-filter --include "browser_navigate" --include "browser_screenshot" -- npx @playwright/mcp
-```
-
-## Quick Start
-
-```bash
-npm install -g mcp-filter
-# or use directly with npx (no install needed)
-npx mcp-filter [options] -- <upstream-command>
 ```
 
 ## Supported Transports
@@ -400,6 +397,48 @@ mcp-filter works with any MCP client that supports stdio servers. The upstream s
   "command": "npx",
   "args": ["mcp-filter", "--exclude", "pattern", "--", "npx", "your-mcp-server"]
 }
+```
+
+## Common Mistakes
+
+### JSON args must be separate strings
+
+In JSON configs (Claude Desktop, Cursor, VS Code), each argument must be its own array element. The shell splits arguments for you — JSON doesn't.
+
+**WRONG:**
+```json
+"args": ["mcp-filter", "--include browser_*", "--", "npx", "server"]
+```
+
+**CORRECT:**
+```json
+"args": ["mcp-filter", "--include", "browser_*", "--", "npx", "server"]
+```
+
+mcp-filter detects this mistake and shows a corrective error message.
+
+### Pattern order matters
+
+Put `--exclude` patterns **before** `--include` to create exceptions. First match wins.
+
+```bash
+# CORRECT: exclude first, then include the rest
+--exclude "browser_close" --include "browser_*"
+# Result: browser_close blocked, other browser_* allowed
+
+# WRONG order: include matches first, exclude never fires
+--include "browser_*" --exclude "browser_close"
+# Result: ALL browser_* allowed including browser_close
+```
+
+### Two `--` separators in Claude Code
+
+When using `claude mcp add`, the first `--` separates Claude's options from the mcp-filter command. The second `--` separates mcp-filter's options from the upstream server command:
+
+```bash
+claude mcp add my-server -- npx mcp-filter --exclude "dangerous_*" -- npx upstream-server
+#                        ^^                                        ^^
+#                   Claude's --                              mcp-filter's --
 ```
 
 ## Programmatic API

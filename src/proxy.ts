@@ -165,7 +165,9 @@ export class ProxyServer {
           if (this.filter.shouldExclude(request.params.name)) {
             throw new McpError(
               ErrorCode.InvalidParams,
-              `Tool '${request.params.name}' is excluded by filter`
+              `Tool '${request.params.name}' is not available. ` +
+                `It has been excluded by mcp-filter. ` +
+                `Use tools/list to see available tools.`
             );
           }
 
@@ -308,7 +310,9 @@ export class ProxyServer {
           if (this.filter.shouldExclude(request.params.name)) {
             throw new McpError(
               ErrorCode.InvalidParams,
-              `Prompt '${request.params.name}' is excluded by filter`
+              `Prompt '${request.params.name}' is not available. ` +
+                `It has been excluded by mcp-filter. ` +
+                `Use prompts/list to see available prompts.`
             );
           }
 
@@ -355,7 +359,9 @@ export class ProxyServer {
           ) {
             throw new McpError(
               ErrorCode.InvalidParams,
-              `Prompt '${ref.name}' is excluded by filter`
+              `Prompt '${ref.name}' is not available. ` +
+                `It has been excluded by mcp-filter. ` +
+                `Use prompts/list to see available prompts.`
             );
           }
           // ref/resource completions forwarded without filtering (same rationale

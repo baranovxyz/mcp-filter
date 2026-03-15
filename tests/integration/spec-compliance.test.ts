@@ -363,7 +363,7 @@ describe.sequential("MCP Spec Compliance", () => {
           ref: { type: "ref/prompt", name: "blocked_prompt" },
           argument: { name: "topic", value: "opt" },
         })
-      ).rejects.toThrow(/excluded by filter/);
+      ).rejects.toThrow(/not available/);
     });
   });
 
@@ -497,7 +497,7 @@ describe.sequential("MCP Spec Compliance", () => {
         expect.unreachable("Should have thrown");
       } catch (error: unknown) {
         expect(error).toBeDefined();
-        expect((error as Error).message).toContain("excluded by filter");
+        expect((error as Error).message).toContain("not available");
       }
     });
 
@@ -512,7 +512,7 @@ describe.sequential("MCP Spec Compliance", () => {
         expect.unreachable("Should have thrown");
       } catch (error: unknown) {
         expect(error).toBeDefined();
-        expect((error as Error).message).toContain("excluded by filter");
+        expect((error as Error).message).toContain("not available");
       }
     });
 

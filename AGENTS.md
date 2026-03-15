@@ -294,6 +294,9 @@ The package is published to npm at https://www.npmjs.com/package/mcp-filter
 ## User Preferences
 
 - **CLI output**: Use `consola` logger (not `console.log`) - outputs to stderr to avoid interfering with MCP JSON-RPC
-- **Error messages**: Make them LLM-friendly with clear WRONG/CORRECT examples for actionable fixes
-- **README style**: Keep concise, avoid redundancy - prefer tables and quick reference sections
+- **Error messages**: Make them LLM-friendly at two levels:
+  - **Setup-time** (cli.ts): WRONG/CORRECT examples for JSON config mistakes
+  - **Runtime** (proxy.ts): Actionable guidance like "Use tools/list to see available tools" — avoid leaking internals like "excluded by filter"
+- **README style**: Keep concise, avoid redundancy - prefer tables and quick reference sections. Include "Common Mistakes" section for LLM self-correction.
 - **Commits/PRs**: Do not mention AI tools in commit messages or PR descriptions
+- **Skills**: `.claude/skills/setup-mcp-filter/` contains a reference skill for configuring mcp-filter in MCP client configs
