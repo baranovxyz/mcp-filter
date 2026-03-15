@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `--help` and `--version` CLI flags
-- CI workflow (GitHub Actions, Node 18/20/22)
+- CI workflow (GitHub Actions, Node 20/22/24)
 - CONTRIBUTING.md for OSS contributors
 - Test for "all items filtered out" empty-list edge case
 - Tests for `--help`, `--version`, and invalid CLI args

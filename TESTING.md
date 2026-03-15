@@ -5,7 +5,7 @@
 mcp-filter has comprehensive test coverage with **187+ tests** across **15 test suites**, covering unit tests, integration tests with real MCP server communication, and full MCP spec compliance validation.
 
 **Framework**: [Vitest](https://vitest.dev/) — ESM-native, TypeScript-first, fast execution.
-**CI**: GitHub Actions on Node 18, 20, and 22.
+**CI**: GitHub Actions on Node 20, 22, and 24.
 
 ## Running Tests
 

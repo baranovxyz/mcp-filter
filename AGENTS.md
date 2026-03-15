@@ -199,7 +199,7 @@ tests/
 ## Testing Approach
 
 - **Framework**: Vitest (ESM-native, TypeScript, fast)
-- **CI**: GitHub Actions runs tests on Node 18, 20, 22
+- **CI**: GitHub Actions runs tests on Node 20, 22, 24
 - **Unit tests**: Test pure functions/classes in isolation
   - Can verify architecture patterns by reading source files (see `tests/unit/index.test.ts`)
   - Validate no anti-patterns exist (e.g., manual subprocess spawning, hardcoded versions)

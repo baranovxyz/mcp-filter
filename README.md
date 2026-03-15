@@ -462,7 +462,7 @@ pnpm test:coverage      # With coverage report
 pnpm test tests/unit/   # Unit tests only (fast)
 ```
 
-Tests run on **Node 18, 20, and 22** via GitHub Actions CI.
+Tests run on **Node 20, 22, and 24** via GitHub Actions CI.
 
 See [TESTING.md](TESTING.md) for the full testing guide.
 
