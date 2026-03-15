@@ -41,11 +41,6 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
       expect(result.tools).toBeDefined();
       expect(Array.isArray(result.tools)).toBe(true);
 
-      console.log(`Context7 tools found: ${result.tools.length}`);
-      result.tools.forEach(tool => {
-        console.log(`  - ${tool.name}`);
-      });
-
       // Verify no tools matching resolve-* pattern are present
       const resolveTools = result.tools.filter(
         (tool) => tool.name.match(/^resolve-/)
@@ -87,8 +82,6 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
       expect(result.tools).toBeDefined();
       expect(Array.isArray(result.tools)).toBe(true);
 
-      console.log(`Connected to context7, found ${result.tools.length} tools`);
-
       // Verify no tools matching our exclusion patterns are present
       const excludedTools = result.tools.filter(
         (tool) => tool.name.startsWith("delete_") || tool.name.startsWith("remove_")
@@ -120,8 +113,6 @@ describe.sequential("HTTP Transport Integration (requires network access)", () =
 
       const result = await client.listTools();
       expect(result.tools).toBeDefined();
-
-      console.log(`Include mode: ${result.tools.length} tools matched 'search_*'`);
 
       // All tools should match the include pattern or we should have 0 tools
       // (if no search tools exist on this server)

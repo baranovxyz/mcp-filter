@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { logger } from "../../src/logger.js";
 import { createClientTransport } from "../../src/transport.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
@@ -105,7 +106,7 @@ describe("createClientTransport", () => {
 
   describe("sse transport", () => {
     it("should create an SSEClientTransport for sse config", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const config: SseConfig = {
         type: "sse",
         url: "https://mcp.example.com/sse",
@@ -117,7 +118,7 @@ describe("createClientTransport", () => {
     });
 
     it("should emit deprecation warning for SSE transport", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const config: SseConfig = {
         type: "sse",
         url: "https://mcp.example.com/sse",
@@ -131,7 +132,7 @@ describe("createClientTransport", () => {
     });
 
     it("should throw error for invalid SSE URL", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const config: SseConfig = {
         type: "sse",
         url: "not-a-url",
