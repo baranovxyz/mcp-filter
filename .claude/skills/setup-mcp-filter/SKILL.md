@@ -32,7 +32,7 @@ CORRECT:
 | Upstream server type | Flag | Example |
 |---------------------|------|---------|
 | Local subprocess | `-- <command>` | `"--", "npx", "@playwright/mcp"` |
-| Remote HTTP | `--upstream-url <url>` | `"--upstream-url", "https://mcp.notion.com/mcp"` |
+| Remote HTTP | `--upstream-url <url>` | `"--upstream-url", "https://mcp.stripe.com"` |
 | Legacy SSE | `--transport`, `sse`, `--upstream-url <url>` | deprecated, prefer HTTP |
 
 `--upstream-url` and `-- <command>` are mutually exclusive.
@@ -213,17 +213,18 @@ claude mcp add SERVER_NAME -- npx mcp-filter --exclude "PATTERN" --upstream-url 
 }
 ```
 
-### Context7 — Docs Only
+### Stripe — Block Refunds
 
 ```json
 {
   "mcpServers": {
-    "context7-docs": {
+    "stripe-safe": {
       "command": "npx",
       "args": [
         "mcp-filter",
-        "--exclude", "resolve-*",
-        "--upstream-url", "https://mcp.context7.com/mcp"
+        "--exclude", "create_refund",
+        "--exclude", "delete_*",
+        "--upstream-url", "https://mcp.stripe.com"
       ]
     }
   }
