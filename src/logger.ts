@@ -1,6 +1,8 @@
 import { createConsola } from "consola";
 
-// Create logger that outputs to stderr to not interfere with MCP JSON-RPC on stdout
+// Force ALL output to stderr so nothing interferes with MCP JSON-RPC on stdout.
+// By default consola sends info/success/log to stdout — we must override both streams.
 export const logger = createConsola({
+  stdout: process.stderr,
   stderr: process.stderr,
 });

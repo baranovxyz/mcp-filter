@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-03-15
+
+### Fixed
+- Logger was writing info/success messages to stdout, corrupting MCP JSON-RPC stream and causing "not valid JSON" errors in clients like Cursor
+
 ## [1.0.0] - 2026-03-14
 
 ### Added

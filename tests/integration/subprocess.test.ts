@@ -208,6 +208,45 @@ describe.sequential("Subprocess Management", () => {
     });
   });
 
+  describe.sequential("Stdout Cleanliness", () => {
+    it("should not leak log messages to stdout (only valid JSON-RPC)", async () => {
+      const { spawn } = await import("child_process");
+
+      const child = spawn("node", [
+        filterBin,
+        "--exclude", "blocked_*",
+        "--", "npx", "tsx", fixtureServer,
+      ]);
+
+      const stdoutChunks: Buffer[] = [];
+      child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+
+      // Connect a client to exercise the full startup path
+      const client = new Client(
+        { name: "stdout-test", version: "1.0.0" },
+        { capabilities: {} },
+      );
+      const transport = new StdioClientTransport({
+        command: "node",
+        args: [filterBin, "--exclude", "blocked_*", "--", "npx", "tsx", fixtureServer],
+      });
+      await client.connect(transport);
+      await client.listTools();
+      await client.close();
+
+      // Kill the standalone child that was collecting raw stdout
+      child.kill("SIGTERM");
+
+      // Verify every line on stdout is valid JSON (JSON-RPC messages)
+      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
+      if (stdout.trim().length > 0) {
+        for (const line of stdout.split("\n").filter((l) => l.trim())) {
+          expect(() => JSON.parse(line), `Non-JSON on stdout: ${line}`).not.toThrow();
+        }
+      }
+    });
+  });
+
   describe.sequential("Backwards Compatibility", () => {
     it("should maintain same filtering behavior as before fix", async () => {
       const client = new Client(

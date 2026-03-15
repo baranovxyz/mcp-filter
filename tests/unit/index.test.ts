@@ -157,6 +157,23 @@ describe("Index Module Integration", () => {
   });
 });
 
+describe("Logger Architecture", () => {
+  let loggerSource: string;
+
+  beforeAll(() => {
+    const loggerPath = path.resolve(__dirname, "../../src/logger.ts");
+    loggerSource = readFileSync(loggerPath, "utf-8");
+  });
+
+  it("should redirect stdout to stderr so log messages never corrupt MCP JSON-RPC", () => {
+    // Consola sends info/success/log to stdout by default.
+    // MCP uses stdout for JSON-RPC, so any log line on stdout causes
+    // clients (e.g. Cursor) to fail with "not valid JSON" parse errors.
+    expect(loggerSource).toContain("stdout: process.stderr");
+    expect(loggerSource).toContain("stderr: process.stderr");
+  });
+});
+
 describe("CLI Flags", () => {
   const filterBin = path.resolve(__dirname, "../../dist/index.js");
 
