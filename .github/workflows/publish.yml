@@ -3,6 +3,14 @@ name: Publish to npm
 on:
   workflow_dispatch:
     inputs:
+      bump:
+        description: "Version bump (patch/minor/none). Use 'none' for major releases — bump package.json manually before dispatching."
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - none
       dry-run:
         description: "Dry run (skip actual publish)"
         required: false
@@ -36,7 +44,7 @@ jobs:
     environment: npm
     permissions:
       id-token: write
-      contents: read
+      contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -58,6 +66,20 @@ jobs:
         run: |
           echo "::error::Publishing is only allowed from the main branch (current: ${{ github.ref_name }})"
           exit 1
+
+      - name: Bump version
+        if: ${{ inputs.bump != 'none' }}
+        run: npm version ${{ inputs.bump }} --no-git-tag-version
+
+      - name: Commit and push version bump
+        if: ${{ inputs.bump != 'none' && !inputs.dry-run }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: release v$VERSION"
+          git push
 
       - name: Get version
         id: version
