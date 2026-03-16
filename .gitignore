@@ -8,5 +8,8 @@ coverage/
 # Local development references (not part of project)
 context/
 
+# Local setup instructions
+PUBLISH-SETUP.md
+
 mcp.json
 .mcp.json
