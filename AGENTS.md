@@ -277,11 +277,19 @@ The package is published to npm at https://www.npmjs.com/package/mcp-filter
 
 ### Publishing Checklist
 
-1. Ensure all tests pass: `pnpm test`
-2. Verify version in package.json matches CHANGELOG
-3. Build: `pnpm run build`
-4. Verify `--version` output: `node dist/index.js --version`
-5. Publish: `pnpm publish`
+1. Bump version in `package.json` (manual, follow semver)
+2. Update `CHANGELOG.md`
+3. Commit: `git commit -m "chore: release v<version>"`
+4. Push to `main`
+5. Trigger publish workflow: GitHub Actions → "Publish to npm" → Run workflow
+   - Use "Dry run" checkbox first to verify
+6. Workflow handles: test → publish (OIDC + provenance) → tag → GitHub Release
+
+### CI/CD Workflows
+
+- **CI** (`.github/workflows/ci.yml`): Runs tests on push/PR to main (Node 20, 22, 24)
+- **Publish** (`.github/workflows/publish.yml`): Manual dispatch, OIDC trusted publishing, auto-tags and creates GitHub Release
+  - Requires one-time setup: see `PUBLISH-SETUP.md` (gitignored)
 
 ### Package Configuration
 
