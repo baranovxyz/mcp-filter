@@ -81,9 +81,16 @@ jobs:
           git commit -m "chore: release v$VERSION"
           git push
 
-      - name: Get version
+      - name: Get version and dist-tag
         id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Version guard
         run: |
@@ -94,11 +101,11 @@ jobs:
 
       - name: Publish (dry run)
         if: ${{ inputs.dry-run }}
-        run: npm publish --provenance --access public --ignore-scripts --dry-run
+        run: npm publish --provenance --access public --ignore-scripts --tag ${{ steps.version.outputs.tag }} --dry-run
 
       - name: Publish
         if: ${{ !inputs.dry-run }}
-        run: npm publish --provenance --access public --ignore-scripts
+        run: npm publish --provenance --access public --ignore-scripts --tag ${{ steps.version.outputs.tag }}
 
   tag-and-release:
     needs: publish
@@ -124,4 +131,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v${{ needs.publish.outputs.version }}"
-          gh release create "$TAG" --generate-notes --title "$TAG" || echo "Release already exists for $TAG, skipping"
+          PRERELEASE=""
+          if [[ "$TAG" == *-* ]]; then
+            PRERELEASE="--prerelease"
+          fi
+          gh release create "$TAG" --generate-notes --title "$TAG" $PRERELEASE || echo "Release already exists for $TAG, skipping"
