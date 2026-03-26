@@ -19,15 +19,23 @@
 
 ## The Problem
 
-[GitHub MCP Server](https://github.com/github/github-mcp-server) exposes 79 tools — **~52,000 tokens** of context window on every request. A PR review agent needs about 10 of them. The other 69 (gists, stars, security advisories, dependabot, discussions...) consume tokens and make tool selection harder for the model.
+MCP servers are getting bigger. Playwright exposes 22 tools. Supabase has 33. Grafana has 56. Atlassian has 72. GitHub MCP has 79. Connect three or four of these and you're looking at **150+ tools consuming 60,000+ tokens** before your first message.
 
-Most MCP clients offer blacklists like `disabledTools` — you list what to block. This works until the upstream server adds a new tool. It silently appears in context because it's not in your blocklist. You find out when the agent calls a tool you didn't know existed.
+This isn't just a cost problem. [Research shows](https://dev.to/nebulagg/mcp-tool-overload-why-more-tools-make-your-agent-worse-5a49) tool selection accuracy drops from **95% with 4 tools to 71% with 46** — a 24-point gap caused purely by context bloat. LLMs start struggling at around [30 tools for large models and 19 for smaller ones](https://www.speakeasy.com/blog/playwright-tool-proliferation). Only [30% of Playwright tools](https://www.speakeasy.com/blog/playwright-tool-proliferation) are used in typical workflows — the rest are noise that makes the agent take wrong actions.
+
+Most MCP clients offer blacklists (`disabledTools`, tool caps). These have two failure modes: you have to manually list every tool to block across every server update, and new tools added upstream silently leak into context because they're not in your blocklist. Cursor [hard-caps at 40 tools](https://forum.cursor.com/t/increase-the-mcp-tool/69194/2) — exceed it and tools are silently dropped. Claude Code users [report 30–72%](https://github.com/anthropics/claude-code/issues/7328) of their 200K context consumed by tool definitions alone.
 
 Blacklists describe what you *don't* want. Whitelists describe what you *do* want — and they're immune to upstream changes.
 
 ## The Solution
 
-`mcp-filter` is an MCP proxy that sits between your client and server. It intercepts tool/resource/prompt lists, applies glob patterns, and only passes through what matches. Add it to your MCP client's JSON config:
+`mcp-filter` is an MCP proxy that sits between your client and server. It intercepts tool/resource/prompt lists, applies glob patterns, and only passes through what matches — turning 79 tools into 10, or 150 into 15.
+
+<p align="center">
+  <img src="https://mermaid.ink/svg/c2VxdWVuY2VEaWFncmFtCiAgICBwYXJ0aWNpcGFudCBDIGFzIE1DUCBDbGllbnQKICAgIHBhcnRpY2lwYW50IEYgYXMgbWNwLWZpbHRlcgogICAgcGFydGljaXBhbnQgUyBhcyBVcHN0cmVhbSBTZXJ2ZXIKCiAgICBOb3RlIG92ZXIgRjogLS1pbmNsdWRlICJwdWxsX3JlcXVlc3RfKiIKCiAgICBDLT4+RjogdG9vbHMvbGlzdAogICAgRi0+PlM6IHRvb2xzL2xpc3QKICAgIFMtLT4+RjogNzkgdG9vbHMKICAgIE5vdGUgb3ZlciBGOiBBcHBseSBwYXR0ZXJuczogNzkg4oaSIDEwCiAgICBGLS0+PkM6IDEwIHRvb2xzCgogICAgQy0+PkY6IHRvb2xzL2NhbGwgInB1bGxfcmVxdWVzdF9yZWFkIgogICAgTm90ZSBvdmVyIEY6IOKckyBNYXRjaGVzIHBhdHRlcm4KICAgIEYtPj5TOiB0b29scy9jYWxsICJwdWxsX3JlcXVlc3RfcmVhZCIKICAgIFMtLT4+RjogcmVzdWx0CiAgICBGLS0+PkM6IHJlc3VsdAoKICAgIEMtPj5GOiB0b29scy9jYWxsICJjcmVhdGVfZ2lzdCIKICAgIE5vdGUgb3ZlciBGOiDinJcgTm90IGluIHdoaXRlbGlzdAogICAgRi0tPj5DOiBFcnJvciAtMzI2MDI=" alt="mcp-filter request flow" />
+</p>
+
+Add it to your MCP client's JSON config:
 
 ```json
 {
@@ -164,12 +172,37 @@ Default behavior for unmatched items:
 
 ## Real-World Examples
 
-The [GitHub MCP Server](https://github.com/github/github-mcp-server) exposes 79 tools across 19 toolsets. Here's how different agents can get exactly the slice they need.
+<details>
+<summary>Playwright — navigation agent (22 → 3 tools)</summary>
+
+Playwright MCP has 22 tools, but [only ~30% are used](https://www.speakeasy.com/blog/playwright-tool-proliferation) in typical workflows. A navigation agent only needs to navigate and take screenshots:
+
+```json
+{
+  "mcpServers": {
+    "playwright-nav": {
+      "command": "npx",
+      "args": [
+        "mcp-filter",
+        "--include", "browser_navigate",
+        "--include", "browser_screenshot",
+        "--include", "browser_click",
+        "--",
+        "npx", "@playwright/mcp@latest"
+      ]
+    }
+  }
+}
+```
+
+Without filtering, the agent wastes actions calling `browser_console_messages` and `browser_snapshot` when it doesn't need them.
+
+</details>
 
 <details>
-<summary>PR review agent — whitelist (79 → ~10 tools)</summary>
+<summary>GitHub MCP — PR review agent (79 → ~10 tools)</summary>
 
-A code review agent only needs PRs, issues, file contents, and search. Everything else — gists, stars, notifications, security advisories — is noise.
+GitHub MCP exposes 79 tools across 19 toolsets. A code review agent only needs PRs, issues, file contents, and search:
 
 ```json
 {
@@ -194,14 +227,14 @@ A code review agent only needs PRs, issues, file contents, and search. Everythin
 }
 ```
 
-When GitHub adds new tools tomorrow, they won't leak through — only the patterns above are visible to the agent.
+The other 69 tools (gists, stars, security advisories, dependabot, discussions...) are excluded. When GitHub adds new tools, they won't leak through.
 
 </details>
 
 <details>
-<summary>Read-only agent — exclude mutations</summary>
+<summary>Any server — read-only mode</summary>
 
-An analytics agent that collects data for reports shouldn't be able to change anything. Exclude all write operations:
+An analytics or reporting agent shouldn't be able to mutate anything. This pattern works with any MCP server that follows `create_*`/`update_*`/`delete_*` naming conventions:
 
 ```json
 {
@@ -215,7 +248,6 @@ An analytics agent that collects data for reports shouldn't be able to change an
         "--exclude", "delete_*",
         "--exclude", "push_*",
         "--exclude", "merge_*",
-        "--exclude", "fork_*",
         "--exclude", "*_write",
         "--",
         "github-mcp-server", "stdio"
@@ -228,14 +260,12 @@ An analytics agent that collects data for reports shouldn't be able to change an
 }
 ```
 
-The agent can read anything but can't modify anything.
-
 </details>
 
 <details>
-<summary>PR tools without merge — rsync-style exceptions</summary>
+<summary>Rsync-style — exceptions within a category</summary>
 
-Allow all PR tools except the ability to merge. First match wins:
+Allow all PR tools except the ability to merge. The `--exclude` fires first:
 
 ```json
 {
@@ -259,7 +289,7 @@ Allow all PR tools except the ability to merge. First match wins:
 }
 ```
 
-`merge_pull_request` hits the `--exclude` first and gets blocked. The remaining PR tools match `--include` and pass through.
+`merge_pull_request` hits `--exclude` first and gets blocked. The remaining PR tools match `--include` and pass through.
 
 </details>
 
