@@ -32,24 +32,19 @@ Blacklists describe what you *don't* want. Whitelists describe what you *do* wan
 `mcp-filter` is an MCP proxy that sits between your client and server. It intercepts tool/resource/prompt lists, applies glob patterns, and only passes through what matches — turning 79 tools into 10, or 150 into 15. Works with local servers via **stdio**, remote servers via **HTTP**, and legacy servers via **SSE**.
 
 ```
-MCP Client        mcp-filter             Upstream Server
-    │                 │                        │
-    │  tools/list     │  tools/list            │
-    │────────────────>│───────────────────────>│
-    │                 │              79 tools   │
-    │     10 tools    │<───────────────────────│
-    │<────────────────│  (apply glob patterns) │
-    │                 │                        │
-    │  tools/call     │  tools/call            │
-    │  "search_code"  │  "search_code"         │
-    │────────────────>│───────────────────────>│
-    │                 │  ✓ matches pattern     │
-    │                 │                        │
-    │  tools/call     │                        │
-    │  "create_gist"  │                        │
-    │────────────────>│  ✗ blocked             │
-    │  Error -32602   │                        │
-    │<────────────────│                        │
+┌─────────────────┐       ┌──────────────────────────────────────┐       ┌─────────────────┐
+│                 │       │           mcp-filter                 │       │                 │
+│   MCP Client    │       │                                      │       │ Upstream Server  │
+│                 │ stdio │  ┌──────────┐      ┌──────────────┐  │ stdio │                 │
+│  Claude         │◄─────►│  │  Server   │────►│ Filter Engine │  │  or   │  79 tools       │
+│  Cursor         │       │  │Transport │     │              │  │ HTTP  │                 │
+│  VS Code        │       │  └──────────┘     │ --include *  │  │◄─────►│  GitHub          │
+│  Claude Desktop │       │                    │ --exclude *  │  │       │  Playwright     │
+│                 │       │  ┌──────────┐     │              │  │       │  Stripe         │
+│                 │       │  │  Client   │◄────│  79 → 10     │  │       │  Grafana        │
+│  Sees 10 tools  │       │  │Transport │     └──────────────┘  │       │  ...            │
+│                 │       │  └──────────┘                        │       │                 │
+└─────────────────┘       └──────────────────────────────────────┘       └─────────────────┘
 ```
 
 Add it to your MCP client's JSON config:
