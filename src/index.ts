@@ -32,6 +32,9 @@ function printUsage() {
   console.error(
     "  --header <header>       Add HTTP header (format: 'Key: Value', HTTP/SSE only)"
   );
+  console.error(
+    "  --authorization <value> Set Authorization header (e.g. 'Bearer token', HTTP/SSE only)"
+  );
   console.error("  --help                  Show this help message");
   console.error("  --version               Show version number");
   console.error("");

@@ -64,7 +64,7 @@ pnpm run build
 1. **CLI Layer** (`src/cli.ts`)
 
    - Parses `--exclude <pattern>` and `--include <pattern>` arguments (rsync-style)
-   - Parses transport options: `--upstream-url`, `--transport`, `--header`
+   - Parses transport options: `--upstream-url`, `--transport`, `--header`, `--authorization`
    - Supports `--help` and `--version` flags
    - Returns `FilterConfig` with patterns and `transportConfig`
    - Supports both stdio (local servers) and HTTP/SSE (remote servers)
@@ -245,6 +245,7 @@ When working with MCP SDK:
 
 - **MUST**: Update `AGENTS.md` in the same commit (or session) as any code change that affects documented structure, capabilities, conventions, test fixtures, or SDK patterns. Do not leave docs stale.
 - Sections to check: Code Organization tree, Architecture bullet points, Testing Approach, MCP SDK Usage Patterns, Debugging.
+- **README vs docs**: README covers only what the package is and how to configure it in MCP clients. Implementation details, spec conformance, and architecture go in `docs/`. See User Preferences → README style for rules.
 
 ## Design Decisions
 
@@ -306,5 +307,8 @@ The package is published to npm at https://www.npmjs.com/package/mcp-filter
   - **Setup-time** (cli.ts): WRONG/CORRECT examples for JSON config mistakes
   - **Runtime** (proxy.ts): Actionable guidance like "Use tools/list to see available tools" — avoid leaking internals like "excluded by filter"
 - **README style**: Keep concise, avoid redundancy - prefer tables and quick reference sections. Include "Common Mistakes" section for LLM self-correction.
+  - **Not a CLI tool**: mcp-filter is a proxy that communicates via stdio JSON-RPC. Running it directly in a terminal just hangs waiting for MCP messages — there is no human-usable CLI. Never show bare `npx mcp-filter ...` or `mcp-filter ...` as commands a user would run in a terminal. Never suggest `npm install -g mcp-filter`.
+  - **Examples must use JSON config format**: The primary setup is adding mcp-filter to an MCP client's JSON config (`"command": "npx", "args": [...]`). All README examples should use this format. The only exception is `claude mcp add` commands, which are real one-time setup commands.
+  - **No implementation details in README**: MCP spec conformance tables, architecture internals, and protocol-level details belong in `docs/`, not README. README answers "what is it" and "how do I set it up".
 - **Commits/PRs**: Do not mention AI tools in commit messages or PR descriptions
 - **Skills**: `.claude/skills/setup-mcp-filter/` contains a reference skill for configuring mcp-filter in MCP client configs

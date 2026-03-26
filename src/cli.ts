@@ -125,6 +125,15 @@ export function parseArgs(args: string[]): FilterConfig {
       continue;
     }
 
+    if (arg === "--authorization") {
+      const value = args[++i];
+      if (!value) {
+        throw new Error("--authorization requires a value (e.g. 'Bearer token')");
+      }
+      headers["Authorization"] = value;
+      continue;
+    }
+
     if (arg === "--help" || arg === "-h") {
       throw new Error("help");
     }
@@ -187,7 +196,7 @@ export function parseArgs(args: string[]): FilterConfig {
     }
 
     if (Object.keys(headers).length > 0) {
-      throw new Error("--header can only be used with --upstream-url");
+      throw new Error("--header/--authorization can only be used with --upstream-url");
     }
 
     transportConfig = {
