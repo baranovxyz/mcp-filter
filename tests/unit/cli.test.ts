@@ -276,10 +276,52 @@ describe("CLI Parser", () => {
       );
     });
 
+    it("should parse --authorization shorthand", () => {
+      const result = parseArgs([
+        "--upstream-url",
+        "https://api.example.com/mcp",
+        "--authorization",
+        "Bearer token123",
+      ]);
+
+      expect(result.transportConfig.type).toBe("http");
+      expect((result.transportConfig as HttpConfig).headers).toEqual({
+        Authorization: "Bearer token123",
+      });
+    });
+
+    it("should allow --authorization with other --header flags", () => {
+      const result = parseArgs([
+        "--upstream-url",
+        "https://api.example.com/mcp",
+        "--authorization",
+        "Bearer token123",
+        "--header",
+        "X-Team-Id: engineering",
+      ]);
+
+      expect((result.transportConfig as HttpConfig).headers).toEqual({
+        Authorization: "Bearer token123",
+        "X-Team-Id": "engineering",
+      });
+    });
+
+    it("should throw error if --authorization has no value", () => {
+      expect(() =>
+        parseArgs(["--upstream-url", "https://example.com", "--authorization"])
+      ).toThrow("--authorization requires a value");
+    });
+
     it("should throw error if --header used without --upstream-url", () => {
       expect(() =>
         parseArgs(["--header", "Auth: token", "--", "node", "server.js"])
-      ).toThrow("--header can only be used with --upstream-url");
+      ).toThrow("--header/--authorization can only be used with --upstream-url");
+    });
+
+    it("should throw error if --authorization used without --upstream-url", () => {
+      expect(() =>
+        parseArgs(["--authorization", "Bearer token", "--", "node", "server.js"])
+      ).toThrow("--header/--authorization can only be used with --upstream-url");
     });
 
     it("should throw error if both --upstream-url and command specified", () => {
