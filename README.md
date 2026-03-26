@@ -29,7 +29,7 @@ Blacklists describe what you *don't* want. Whitelists describe what you *do* wan
 
 ## The Solution
 
-`mcp-filter` is an MCP proxy that sits between your client and server. It intercepts tool/resource/prompt lists, applies glob patterns, and only passes through what matches — turning 79 tools into 10, or 150 into 15.
+`mcp-filter` is an MCP proxy that sits between your client and server. It intercepts tool/resource/prompt lists, applies glob patterns, and only passes through what matches — turning 79 tools into 10, or 150 into 15. Works with local servers via **stdio**, remote servers via **HTTP**, and legacy servers via **SSE**.
 
 <p align="center">
   <img src="https://mermaid.ink/svg/c2VxdWVuY2VEaWFncmFtCiAgICBwYXJ0aWNpcGFudCBDIGFzIE1DUCBDbGllbnQKICAgIHBhcnRpY2lwYW50IEYgYXMgbWNwLWZpbHRlcgogICAgcGFydGljaXBhbnQgUyBhcyBVcHN0cmVhbSBTZXJ2ZXIKCiAgICBOb3RlIG92ZXIgRjogLS1pbmNsdWRlICJwdWxsX3JlcXVlc3RfKiIKCiAgICBDLT4+RjogdG9vbHMvbGlzdAogICAgRi0+PlM6IHRvb2xzL2xpc3QKICAgIFMtLT4+RjogNzkgdG9vbHMKICAgIE5vdGUgb3ZlciBGOiBBcHBseSBwYXR0ZXJuczogNzkg4oaSIDEwCiAgICBGLS0+PkM6IDEwIHRvb2xzCgogICAgQy0+PkY6IHRvb2xzL2NhbGwgInB1bGxfcmVxdWVzdF9yZWFkIgogICAgTm90ZSBvdmVyIEY6IOKckyBNYXRjaGVzIHBhdHRlcm4KICAgIEYtPj5TOiB0b29scy9jYWxsICJwdWxsX3JlcXVlc3RfcmVhZCIKICAgIFMtLT4+RjogcmVzdWx0CiAgICBGLS0+PkM6IHJlc3VsdAoKICAgIEMtPj5GOiB0b29scy9jYWxsICJjcmVhdGVfZ2lzdCIKICAgIE5vdGUgb3ZlciBGOiDinJcgTm90IGluIHdoaXRlbGlzdAogICAgRi0tPj5DOiBFcnJvciAtMzI2MDI=" alt="mcp-filter request flow" />
